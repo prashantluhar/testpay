@@ -167,7 +167,7 @@ export default function SettingsPage() {
                       key={g}
                       gateway={g}
                       value={overrides[g] ?? ''}
-                      placeholder={defaultUrl || 'Uses default above'}
+                      placeholder="Uses default URL"
                       onChange={(v) =>
                         setOverrides((prev) => ({ ...prev, [g]: v }))
                       }
