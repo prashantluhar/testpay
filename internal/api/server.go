@@ -26,7 +26,9 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 		time.Duration(cfg.Webhook.BaseDelayMs)*time.Millisecond,
 	)
 
-	// Global middleware
+	// Global middleware — CORS first so preflight requests short-circuit before
+	// Auth/Session middleware tries to process OPTIONS.
+	r.Use(middleware.CORS(cfg.CORS.AllowedOrigins))
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger(cfg.Environment, "testpay"))
