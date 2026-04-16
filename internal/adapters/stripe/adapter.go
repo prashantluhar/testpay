@@ -113,13 +113,21 @@ func errorMessage(mode engine.FailureMode) string {
 
 func statusFromMode(mode engine.FailureMode) string {
 	switch mode {
-	case engine.ModeSuccess, engine.ModeWebhookMissing, engine.ModeWebhookDelayed,
-		engine.ModeWebhookDuplicate, engine.ModeDoubleCharge:
+	case engine.ModeSuccess,
+		engine.ModeWebhookMissing, engine.ModeWebhookDelayed, engine.ModeWebhookDuplicate,
+		engine.ModeWebhookOutOfOrder, engine.ModeWebhookMalformed,
+		engine.ModeDoubleCharge, engine.ModeAmountMismatch, engine.ModePartialSuccess,
+		engine.ModeRedirectSuccess:
 		return "succeeded"
 	case engine.ModePendingThenFailed, engine.ModePendingThenSuccess, engine.ModeFailedThenSuccess:
 		return "processing"
+	case engine.ModeSuccessThenReversed:
+		// Reversed after a success — Stripe flips to canceled.
+		return "canceled"
 	default:
-		return "succeeded"
+		// All declines, timeouts, redirect failures, network errors, etc.
+		// Stripe's payment_intent state after a failed charge is requires_payment_method.
+		return "requires_payment_method"
 	}
 }
 

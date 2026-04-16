@@ -2,7 +2,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMe } from '@/lib/hooks';
-import { MODE } from '@/lib/types';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
 import { ApiError } from '@/lib/api';
@@ -12,26 +11,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data, error, isLoading } = useMe();
 
   useEffect(() => {
-    if (MODE === 'hosted' && error instanceof ApiError && error.status === 401) {
+    if (error instanceof ApiError && error.status === 401) {
       router.push('/login');
     }
   }, [error, router]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen grid place-items-center text-muted-foreground">Loading…</div>
+      <div className="min-h-screen grid place-items-center text-muted-foreground">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-6 w-6 border-2 border-muted-foreground/40 border-t-emerald-500 rounded-full animate-spin" />
+          <div className="text-sm">Loading…</div>
+        </div>
+      </div>
     );
   }
 
-  if (MODE === 'hosted' && (error || !data)) return null;
-  if (!data) return null;
+  // No data (either 401 or other error) → block render; effect above redirects.
+  if (!data || error) return null;
+  // Extra guard: the Me endpoint should not return user=null for authenticated
+  // callers. If it does, treat as unauthenticated and redirect.
+  if (!data.user) {
+    router.push('/login');
+    return null;
+  }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex bg-background">
       <Sidebar user={data.user} workspace={data.workspace} />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <Topbar workspace={data.workspace} />
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-6xl mx-auto px-6 py-8 w-full">{children}</div>
+        </main>
       </div>
     </div>
   );

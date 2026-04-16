@@ -11,15 +11,43 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSession_localModeInjectsLocalWorkspace(t *testing.T) {
-	var gotWorkspace string
+func TestSession_noCookieLeavesContextEmpty(t *testing.T) {
+	// Session no longer falls back to LocalWorkspaceID; context stays empty
+	// when there's no session cookie. Dashboard routes are login-gated.
+	var gotWorkspace, gotUser string
 	h := middleware.Session("any-secret", "local")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotWorkspace, _ = middleware.WorkspaceIDFromContext(r.Context())
+		gotUser, _ = middleware.UserIDFromContext(r.Context())
 		w.WriteHeader(200)
 	}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
-	assert.NotEmpty(t, gotWorkspace)
+	assert.Empty(t, gotWorkspace)
+	assert.Empty(t, gotUser)
+}
+
+func TestRequireAuth_401WhenNoSession(t *testing.T) {
+	h := middleware.Session("test-secret", "local")(middleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	})))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/api/scenarios", nil))
+	assert.Equal(t, 401, rec.Code)
+}
+
+func TestRequireAuth_200WithValidSession(t *testing.T) {
+	secret := "test-secret"
+	token, err := middleware.IssueToken(secret, "user-1", "ws-1", 24*time.Hour)
+	require.NoError(t, err)
+
+	h := middleware.Session(secret, "local")(middleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	})))
+	req := httptest.NewRequest("GET", "/api/scenarios", nil)
+	req.AddCookie(&http.Cookie{Name: "testpay_session", Value: token})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, 200, rec.Code)
 }
 
 func TestSession_hostedWithValidCookie(t *testing.T) {

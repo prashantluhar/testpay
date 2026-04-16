@@ -54,20 +54,14 @@ func ParseToken(secret, raw string) (*Claims, error) {
 	return &c, nil
 }
 
-// Session populates context with workspace_id (and user_id when available).
-// - local mode: injects LocalWorkspaceID, no user
-// - hosted mode: parses the cookie if present; invalid/missing is silent (RequireSession enforces)
+// Session populates context with user_id and workspace_id if the session
+// cookie is valid. No anonymous fallback — dashboard access is always
+// login-gated. Mock endpoints resolve their workspace via api_key Bearer auth.
 func Session(secret, mode string) func(http.Handler) http.Handler {
+	_ = mode // retained for API compat; not used anymore
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-
-			if mode == "local" {
-				ctx = context.WithValue(ctx, workspaceIDKey, LocalWorkspaceID)
-				next.ServeHTTP(w, r.WithContext(ctx))
-				return
-			}
-
 			cookie, err := r.Cookie(SessionCookieName)
 			if err == nil {
 				claims, perr := ParseToken(secret, cookie.Value)
@@ -81,6 +75,21 @@ func Session(secret, mode string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// RequireAuth is middleware that 401s if no authenticated session is present.
+// Apply to dashboard /api routes (not /api/auth/*). Mock endpoints do their own
+// api_key-based auth and should not use this.
+func RequireAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := UserIDFromContext(r.Context()); !ok {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"login required"}`))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // RequireSession writes a 401 if no user is in context and returns false.
