@@ -34,11 +34,13 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 	r.Use(middleware.Session(cfg.Auth.JWTSecret, cfg.Server.Mode))
 	r.Use(middleware.Auth(cfg.Server.Mode, cfg.Auth.APIKey))
 
-	// Mock gateway endpoints (Stripe, Razorpay, Agnostic)
+	// Mock gateway endpoints (Stripe, Razorpay, Agnostic).
+	// The handler uses the original URL path (including /stripe, /razorpay, /v1)
+	// to resolve the gateway adapter — don't strip the prefix.
 	mockHandler := handlers.NewMock(eng, reg, s, dispatcher)
-	r.Mount("/stripe", http.StripPrefix("/stripe", mockHandler))
-	r.Mount("/razorpay", http.StripPrefix("/razorpay", mockHandler))
-	r.Mount("/v1", http.StripPrefix("/v1", mockHandler))
+	r.Handle("/stripe/*", mockHandler)
+	r.Handle("/razorpay/*", mockHandler)
+	r.Handle("/v1/*", mockHandler)
 
 	// Control API
 	r.Route("/api", func(r chi.Router) {

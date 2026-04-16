@@ -15,9 +15,12 @@ type Registry struct {
 
 func NewRegistry() *Registry {
 	r := &Registry{adapters: make(map[string]Adapter)}
+	ag := agnostic.New()
 	r.adapters["stripe"] = stripe.New()
 	r.adapters["razorpay"] = razorpay.New()
-	r.adapters["agnostic"] = agnostic.New()
+	r.adapters["agnostic"] = ag
+	// URL-prefix alias: /v1/... routes to the agnostic adapter.
+	r.adapters["v1"] = ag
 	return r
 }
 
