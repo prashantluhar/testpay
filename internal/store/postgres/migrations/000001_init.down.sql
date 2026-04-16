@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS webhook_logs;
+DROP TABLE IF EXISTS request_logs;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS scenario_runs;
+DROP TABLE IF EXISTS scenarios;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS workspaces;
+DROP EXTENSION IF EXISTS "uuid-ossp";
