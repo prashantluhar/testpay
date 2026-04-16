@@ -1,0 +1,37 @@
+package store
+
+import "context"
+
+type Store interface {
+	// Workspace
+	CreateWorkspace(ctx context.Context, w *Workspace) error
+	GetWorkspaceByAPIKey(ctx context.Context, apiKey string) (*Workspace, error)
+	GetWorkspaceBySlug(ctx context.Context, slug string) (*Workspace, error)
+
+	// Scenarios
+	ListScenarios(ctx context.Context, workspaceID string) ([]*Scenario, error)
+	CreateScenario(ctx context.Context, s *Scenario) error
+	GetScenario(ctx context.Context, id string) (*Scenario, error)
+	UpdateScenario(ctx context.Context, s *Scenario) error
+	DeleteScenario(ctx context.Context, id string) error
+	GetDefaultScenario(ctx context.Context, workspaceID string) (*Scenario, error)
+
+	// ScenarioRuns
+	CreateScenarioRun(ctx context.Context, r *ScenarioRun) error
+	UpdateScenarioRun(ctx context.Context, r *ScenarioRun) error
+
+	// Sessions
+	CreateSession(ctx context.Context, s *Session) error
+	GetActiveSession(ctx context.Context, workspaceID string) (*Session, error)
+	DeleteSession(ctx context.Context, id string) error
+
+	// RequestLogs
+	CreateRequestLog(ctx context.Context, l *RequestLog) error
+	ListRequestLogs(ctx context.Context, workspaceID string, limit, offset int) ([]*RequestLog, error)
+	GetRequestLog(ctx context.Context, id string) (*RequestLog, error)
+
+	// WebhookLogs
+	CreateWebhookLog(ctx context.Context, l *WebhookLog) error
+	UpdateWebhookLog(ctx context.Context, l *WebhookLog) error
+	GetWebhookLogByRequestID(ctx context.Context, requestLogID string) (*WebhookLog, error)
+}
