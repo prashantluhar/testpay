@@ -10,6 +10,11 @@ import (
 
 // DispatchAsync fires a webhook in a goroutine and updates the WebhookLog.
 // delayMs: milliseconds to wait before dispatching (0 = immediate).
+//
+// The incoming ctx is detached from its parent's cancellation via
+// context.WithoutCancel so the goroutine's DB writes and HTTP calls survive
+// after the originating HTTP request has completed. The logger (and any
+// trace-id) stored in ctx is preserved.
 func DispatchAsync(
 	ctx context.Context,
 	d *Dispatcher,
@@ -17,6 +22,7 @@ func DispatchAsync(
 	webhookLog *store.WebhookLog,
 	delayMs int,
 ) {
+	ctx = context.WithoutCancel(ctx)
 	go func() {
 		logger := zerolog.Ctx(ctx)
 
