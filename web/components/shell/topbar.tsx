@@ -12,7 +12,7 @@ export function Topbar({ workspace }: { workspace: Workspace }) {
   const baseUrl =
     MODE === 'local'
       ? 'http://localhost:7700'
-      : `https://api.testpay.dev/ws_${workspace.Slug}`;
+      : `https://api.testpay.dev/ws_${workspace.slug}`;
 
   return (
     <header className="h-14 border-b px-6 flex items-center justify-between bg-card">

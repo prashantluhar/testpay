@@ -73,23 +73,23 @@ export default function ScenariosPage() {
           </TableHeader>
           <TableBody>
             {data?.map((s) => (
-              <TableRow key={s.ID}>
-                <TableCell className="font-medium">{s.Name}</TableCell>
+              <TableRow key={s.id}>
+                <TableCell className="font-medium">{s.name}</TableCell>
                 <TableCell>
-                  <GatewayBadge gateway={s.Gateway} />
+                  <GatewayBadge gateway={s.gateway} />
                 </TableCell>
-                <TableCell className="font-mono text-xs">{s.Steps?.length ?? 0}</TableCell>
-                <TableCell className="text-xs">{s.IsDefault ? 'yes' : ''}</TableCell>
+                <TableCell className="font-mono text-xs">{s.steps?.length ?? 0}</TableCell>
+                <TableCell className="text-xs">{s.is_default ? 'yes' : ''}</TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button size="sm" variant="ghost" onClick={() => runScenario(s.ID)}>
+                  <Button size="sm" variant="ghost" onClick={() => runScenario(s.id)}>
                     <Play className="h-4 w-4" />
                   </Button>
                   <Button size="sm" variant="ghost" asChild>
-                    <Link href={`/scenarios/${s.ID}`}>
+                    <Link href={`/scenarios/${s.id}`}>
                       <Pencil className="h-4 w-4" />
                     </Link>
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setDeleteId(s.ID)}>
+                  <Button size="sm" variant="ghost" onClick={() => setDeleteId(s.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>

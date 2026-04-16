@@ -29,8 +29,8 @@ export function LogDetailDrawer({ id, onClose }: { id: string | null; onClose: (
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             Request detail
-            {data?.request && <StatusChip status={data.request.ResponseStatus} />}
-            {data?.request && <GatewayBadge gateway={data.request.Gateway} />}
+            {data?.request && <StatusChip status={data.request.response_status} />}
+            {data?.request && <GatewayBadge gateway={data.request.gateway} />}
           </SheetTitle>
         </SheetHeader>
         {!data ? (
@@ -50,15 +50,15 @@ export function LogDetailDrawer({ id, onClose }: { id: string | null; onClose: (
               </TabsList>
               <TabsContent value="request" className="space-y-2">
                 <div className="text-xs text-muted-foreground">Headers</div>
-                <JsonViewer value={data.request.RequestHeaders} />
+                <JsonViewer value={data.request.request_headers} />
                 <div className="text-xs text-muted-foreground mt-2">Body</div>
-                <JsonViewer value={data.request.RequestBody} />
+                <JsonViewer value={data.request.request_body} />
               </TabsContent>
               <TabsContent value="response" className="space-y-2">
                 <div className="text-xs text-muted-foreground">Headers</div>
-                <JsonViewer value={data.request.ResponseHeaders} />
+                <JsonViewer value={data.request.response_headers} />
                 <div className="text-xs text-muted-foreground mt-2">Body</div>
-                <JsonViewer value={data.request.ResponseBody} />
+                <JsonViewer value={data.request.response_body} />
               </TabsContent>
               <TabsContent value="webhook">
                 <JsonViewer value={data.webhook ?? { note: 'no webhook for this request' }} />

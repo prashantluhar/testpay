@@ -16,7 +16,7 @@ export default function SettingsPage() {
   const { workspace, user } = data;
 
   const baseUrl =
-    MODE === 'local' ? 'http://localhost:7700' : `https://api.testpay.dev/ws_${workspace.Slug}`;
+    MODE === 'local' ? 'http://localhost:7700' : `https://api.testpay.dev/ws_${workspace.slug}`;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -30,13 +30,13 @@ export default function SettingsPage() {
           <div>
             <Label>Slug</Label>
             <code className="block font-mono text-sm bg-muted px-3 py-2 rounded-md mt-1">
-              {workspace.Slug}
+              {workspace.slug}
             </code>
           </div>
           <div>
             <Label>API key</Label>
             <div className="mt-1">
-              <ApiKeyReveal value={workspace.APIKey} />
+              <ApiKeyReveal value={workspace.api_key} />
             </div>
           </div>
         </CardContent>
@@ -88,7 +88,7 @@ export default function SettingsPage() {
             <CardTitle className="text-base">Account</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-sm text-muted-foreground">{user.Email}</div>
+            <div className="text-sm text-muted-foreground">{user.email}</div>
           </CardContent>
         </Card>
       )}

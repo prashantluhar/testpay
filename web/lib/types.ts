@@ -1,16 +1,16 @@
 export interface Workspace {
-  ID: string;
-  Slug: string;
-  APIKey: string;
-  CreatedAt: string;
+  id: string;
+  slug: string;
+  api_key: string;
+  created_at: string;
 }
 
 export interface User {
-  ID: string;
-  WorkspaceID: string;
-  Email: string;
-  Role: 'owner' | 'member';
-  CreatedAt: string;
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: 'owner' | 'member';
+  created_at: string;
 }
 
 export interface Step {
@@ -20,23 +20,23 @@ export interface Step {
 }
 
 export interface Scenario {
-  ID: string;
-  WorkspaceID: string;
-  Name: string;
-  Description: string;
-  Gateway: 'stripe' | 'razorpay' | 'agnostic';
-  Steps: Step[];
-  WebhookDelayMs: number;
-  IsDefault: boolean;
-  CreatedAt: string;
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  gateway: 'stripe' | 'razorpay' | 'agnostic';
+  steps: Step[];
+  webhook_delay_ms: number;
+  is_default: boolean;
+  created_at: string;
 }
 
 export interface ScenarioRun {
-  ID: string;
-  ScenarioID: string;
-  Status: 'running' | 'completed' | 'failed';
-  StartedAt: string;
-  CompletedAt?: string;
+  id: string;
+  scenario_id: string;
+  status: 'running' | 'completed' | 'failed';
+  started_at: string;
+  completed_at?: string;
 }
 
 export interface AttemptLog {
@@ -47,32 +47,32 @@ export interface AttemptLog {
 }
 
 export interface RequestLog {
-  ID: string;
-  WorkspaceID: string;
-  ScenarioRunID?: string;
-  Gateway: string;
-  Method: string;
-  Path: string;
-  RequestHeaders: Record<string, string>;
-  RequestBody: Record<string, unknown>;
-  ResponseHeaders: Record<string, string>;
-  ResponseBody: Record<string, unknown>;
-  ResponseStatus: number;
-  DurationMs: number;
-  ClientIP: string;
-  CreatedAt: string;
+  id: string;
+  workspace_id: string;
+  scenario_run_id?: string;
+  gateway: string;
+  method: string;
+  path: string;
+  request_headers: Record<string, string>;
+  request_body: Record<string, unknown>;
+  response_headers: Record<string, string>;
+  response_body: Record<string, unknown>;
+  response_status: number;
+  duration_ms: number;
+  client_ip: string;
+  created_at: string;
 }
 
 export interface WebhookLog {
-  ID: string;
-  RequestLogID: string;
-  Payload: Record<string, unknown>;
-  TargetURL: string;
-  DeliveryStatus: 'pending' | 'delivered' | 'failed' | 'duplicate';
-  Attempts: number;
-  AttemptLogs: AttemptLog[];
-  DeliveredAt?: string;
-  CreatedAt: string;
+  id: string;
+  request_log_id: string;
+  payload: Record<string, unknown>;
+  target_url: string;
+  delivery_status: 'pending' | 'delivered' | 'failed' | 'duplicate';
+  attempts: number;
+  attempt_logs: AttemptLog[];
+  delivered_at?: string;
+  created_at: string;
 }
 
 export interface AuthResponse {

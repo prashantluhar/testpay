@@ -34,22 +34,22 @@ export function LogsTable({
         <TableBody>
           {rows.map((l) => (
             <TableRow
-              key={l.ID}
+              key={l.id}
               className="cursor-pointer font-mono text-xs"
-              onClick={() => onSelect(l.ID)}
+              onClick={() => onSelect(l.id)}
             >
               <TableCell className="text-muted-foreground">
-                {new Date(l.CreatedAt).toLocaleString()}
+                {new Date(l.created_at).toLocaleString()}
               </TableCell>
               <TableCell>
-                <StatusChip status={l.ResponseStatus} />
+                <StatusChip status={l.response_status} />
               </TableCell>
-              <TableCell className="text-muted-foreground">{l.Method}</TableCell>
-              <TableCell className="truncate max-w-xs">{l.Path}</TableCell>
+              <TableCell className="text-muted-foreground">{l.method}</TableCell>
+              <TableCell className="truncate max-w-xs">{l.path}</TableCell>
               <TableCell>
-                <GatewayBadge gateway={l.Gateway} />
+                <GatewayBadge gateway={l.gateway} />
               </TableCell>
-              <TableCell className="text-right text-muted-foreground">{l.DurationMs}ms</TableCell>
+              <TableCell className="text-right text-muted-foreground">{l.duration_ms}ms</TableCell>
             </TableRow>
           ))}
           {rows.length === 0 && (

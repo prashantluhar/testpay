@@ -31,22 +31,22 @@ export function ScenarioForm({ initial }: { initial?: Scenario }) {
     resolver: zodResolver(scenarioSchema),
     defaultValues: initial
       ? {
-          Name: initial.Name,
-          Description: initial.Description,
-          Gateway: initial.Gateway,
-          Steps: initial.Steps.length
-            ? (initial.Steps as Step[])
+          name: initial.name,
+          description: initial.description,
+          gateway: initial.gateway,
+          steps: initial.steps?.length
+            ? (initial.steps as Step[])
             : [{ event: 'charge', outcome: 'success' }],
-          WebhookDelayMs: initial.WebhookDelayMs,
-          IsDefault: initial.IsDefault,
+          webhook_delay_ms: initial.webhook_delay_ms,
+          is_default: initial.is_default,
         }
       : {
-          Name: '',
-          Description: '',
-          Gateway: 'stripe',
-          Steps: [{ event: 'charge', outcome: 'success' }],
-          WebhookDelayMs: 0,
-          IsDefault: false,
+          name: '',
+          description: '',
+          gateway: 'stripe',
+          steps: [{ event: 'charge', outcome: 'success' }],
+          webhook_delay_ms: 0,
+          is_default: false,
         },
   });
 
@@ -55,7 +55,7 @@ export function ScenarioForm({ initial }: { initial?: Scenario }) {
   async function onSubmit(data: ScenarioInput) {
     try {
       if (isEdit && initial) {
-        await api(`/api/scenarios/${initial.ID}`, { method: 'PUT', body: JSON.stringify(data) });
+        await api(`/api/scenarios/${initial.id}`, { method: 'PUT', body: JSON.stringify(data) });
         toast.success('Scenario saved');
       } else {
         await api(`/api/scenarios`, { method: 'POST', body: JSON.stringify(data) });
@@ -68,7 +68,7 @@ export function ScenarioForm({ initial }: { initial?: Scenario }) {
     }
   }
 
-  const previewJson = { ...values, ID: initial?.ID ?? 'new' };
+  const previewJson = { ...values, id: initial?.id ?? 'new' };
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -79,17 +79,17 @@ export function ScenarioForm({ initial }: { initial?: Scenario }) {
         <CardContent className="space-y-4">
           <div>
             <Label htmlFor="name">Name</Label>
-            <Input id="name" {...form.register('Name')} />
+            <Input id="name" {...form.register('name')} />
           </div>
           <div>
             <Label htmlFor="desc">Description</Label>
-            <Input id="desc" {...form.register('Description')} />
+            <Input id="desc" {...form.register('description')} />
           </div>
           <div>
             <Label>Gateway</Label>
             <Controller
               control={form.control}
-              name="Gateway"
+              name="gateway"
               render={({ field }) => (
                 <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger>
@@ -108,7 +108,7 @@ export function ScenarioForm({ initial }: { initial?: Scenario }) {
             <Label>Steps</Label>
             <Controller
               control={form.control}
-              name="Steps"
+              name="steps"
               render={({ field }) => (
                 <ScenarioStepEditor
                   steps={field.value as Step[]}
@@ -122,13 +122,13 @@ export function ScenarioForm({ initial }: { initial?: Scenario }) {
             <Input
               id="delay"
               type="number"
-              {...form.register('WebhookDelayMs', { valueAsNumber: true })}
+              {...form.register('webhook_delay_ms', { valueAsNumber: true })}
             />
           </div>
           <div className="flex items-center gap-2">
             <Controller
               control={form.control}
-              name="IsDefault"
+              name="is_default"
               render={({ field }) => (
                 <Checkbox checked={field.value} onCheckedChange={field.onChange} id="default" />
               )}

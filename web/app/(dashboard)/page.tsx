@@ -9,7 +9,7 @@ export default function OverviewPage() {
   const { data: scenarios } = useScenarios();
 
   const total = logs?.length ?? 0;
-  const errors = logs?.filter((l) => l.ResponseStatus >= 400).length ?? 0;
+  const errors = logs?.filter((l) => l.response_status >= 400).length ?? 0;
   const success = total > 0 ? (((total - errors) / total) * 100).toFixed(1) + '%' : '—';
 
   return (

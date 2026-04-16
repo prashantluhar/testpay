@@ -17,14 +17,14 @@ export default function LogsPage() {
   const rows = useMemo(() => {
     if (!data) return [];
     return data.filter((l) => {
-      if (filters.gateway !== 'all' && l.Gateway !== filters.gateway) return false;
+      if (filters.gateway !== 'all' && l.gateway !== filters.gateway) return false;
       if (filters.statusClass !== 'all') {
-        const s = l.ResponseStatus;
+        const s = l.response_status;
         if (filters.statusClass === '2xx' && !(s >= 200 && s < 300)) return false;
         if (filters.statusClass === '4xx' && !(s >= 400 && s < 500)) return false;
         if (filters.statusClass === '5xx' && !(s >= 500 && s < 600)) return false;
       }
-      if (filters.search && !l.Path.toLowerCase().includes(filters.search.toLowerCase()))
+      if (filters.search && !l.path.toLowerCase().includes(filters.search.toLowerCase()))
         return false;
       return true;
     });

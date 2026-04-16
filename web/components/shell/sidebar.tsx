@@ -34,7 +34,7 @@ export function Sidebar({ user, workspace }: { user: User | null; workspace: Wor
       </div>
       <div className="p-4 text-xs text-muted-foreground border-b">
         <div className="uppercase tracking-wider mb-1">Workspace</div>
-        <div className="font-mono text-foreground">{workspace.Slug}</div>
+        <div className="font-mono text-foreground">{workspace.slug}</div>
       </div>
       <nav className="flex-1 p-2 space-y-1">
         {items.map((it) => {
@@ -59,7 +59,7 @@ export function Sidebar({ user, workspace }: { user: User | null; workspace: Wor
       <div className="p-4 border-t text-xs">
         {MODE === 'hosted' && user ? (
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground truncate">{user.Email}</span>
+            <span className="text-muted-foreground truncate">{user.email}</span>
             <button
               onClick={signOut}
               className="text-muted-foreground hover:text-foreground"

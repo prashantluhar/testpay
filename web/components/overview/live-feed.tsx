@@ -19,14 +19,14 @@ export function LiveFeed() {
   return (
     <div className="divide-y">
       {data.map((l) => (
-        <div key={l.ID} className="px-4 py-2 flex items-center gap-3 text-sm font-mono">
-          <StatusChip status={l.ResponseStatus} />
-          <span className="text-muted-foreground w-14">{l.Method}</span>
-          <GatewayBadge gateway={l.Gateway} />
-          <span className="flex-1 truncate">{l.Path}</span>
-          <span className="text-muted-foreground text-xs">{l.DurationMs}ms</span>
+        <div key={l.id} className="px-4 py-2 flex items-center gap-3 text-sm font-mono">
+          <StatusChip status={l.response_status} />
+          <span className="text-muted-foreground w-14">{l.method}</span>
+          <GatewayBadge gateway={l.gateway} />
+          <span className="flex-1 truncate">{l.path}</span>
+          <span className="text-muted-foreground text-xs">{l.duration_ms}ms</span>
           <span className="text-muted-foreground text-xs">
-            {new Date(l.CreatedAt).toLocaleTimeString()}
+            {new Date(l.created_at).toLocaleTimeString()}
           </span>
         </div>
       ))}
