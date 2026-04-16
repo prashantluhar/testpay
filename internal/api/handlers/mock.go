@@ -143,7 +143,10 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Int("duration_ms", durationMs).
 		Msg("response written")
 
-	// ── 7. Persist + dispatch (fire-and-forget) ─────────────────────────────
+	// ── 7. Persist + dispatch ───────────────────────────────────────────────
+	// Single goroutine that persists request_log first, THEN webhook_log(s),
+	// THEN triggers dispatch. Sequencing avoids FK violations on webhook_logs
+	// (request_log_id → request_logs.id must exist first).
 	if h.store != nil {
 		persistCtx := context.WithoutCancel(ctx)
 		chargeID := uuid.NewString()
@@ -160,86 +163,96 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			DurationMs:     durationMs,
 			ClientIP:       r.RemoteAddr,
 		}
-		go func(ctx context.Context, l *store.RequestLog) {
-			if err := h.store.CreateRequestLog(ctx, l); err != nil {
-				zerolog.Ctx(ctx).Error().
-					Err(err).
-					Str("step", "persist_request_log").
-					Str("request_log_id", l.ID).
-					Msg("failed to persist request log")
-				return
-			}
-			zerolog.Ctx(ctx).Debug().
-				Str("step", "persist_request_log").
-				Str("request_log_id", l.ID).
-				Msg("request log persisted")
-		}(persistCtx, reqLog)
 
+		// Resolve webhook target before entering goroutine so log ordering
+		// is clear in the foreground trace.
+		var (
+			targetURL       string
+			willSendWebhook bool
+		)
 		if !result.SkipWebhook && h.dispatcher != nil {
-			// Webhook target priority:
-			//   1. X-Webhook-URL header (per-request override)
-			//   2. workspace.webhook_urls[adapter.Name()] (gateway-specific)
-			targetURL := r.Header.Get("X-Webhook-URL")
+			// Priority: X-Webhook-URL header > workspace.webhook_urls[gateway]
+			targetURL = r.Header.Get("X-Webhook-URL")
 			if targetURL == "" && workspace != nil {
 				targetURL = workspace.WebhookURLs[adapter.Name()]
 			}
-
-			if targetURL == "" {
+			willSendWebhook = targetURL != ""
+			if !willSendWebhook {
 				log.Info().
 					Str("step", "webhook_skipped").
 					Str("reason", "no target URL configured").
 					Str("gateway", adapter.Name()).
 					Msg("webhook skipped")
 			} else {
-				amount, currency := extractAmountCurrency(bodyMap, 5000, "usd")
-				payload := adapter.BuildWebhookPayload(result, chargeID, amount, currency, bodyMap)
+				log.Info().
+					Str("step", "webhook_scheduled").
+					Str("target_url", targetURL).
+					Int("delay_ms", result.WebhookDelayMs).
+					Msg("webhook dispatch scheduled")
+			}
+		}
 
-				wl := &store.WebhookLog{
+		go func() {
+			// 1. Persist the request log first.
+			if err := h.store.CreateRequestLog(persistCtx, reqLog); err != nil {
+				zerolog.Ctx(persistCtx).Error().
+					Err(err).
+					Str("step", "persist_request_log").
+					Str("request_log_id", reqLog.ID).
+					Msg("failed to persist request log — skipping webhook persistence")
+				return
+			}
+			zerolog.Ctx(persistCtx).Debug().
+				Str("step", "persist_request_log").
+				Str("request_log_id", reqLog.ID).
+				Msg("request log persisted")
+
+			if !willSendWebhook {
+				return
+			}
+
+			// 2. Build payload + persist webhook log(s).
+			amount, currency := extractAmountCurrency(bodyMap, 5000, "usd")
+			payload := adapter.BuildWebhookPayload(result, chargeID, amount, currency, bodyMap)
+
+			wl := &store.WebhookLog{
+				ID:             uuid.NewString(),
+				RequestLogID:   reqLog.ID,
+				Payload:        payload,
+				TargetURL:      targetURL,
+				DeliveryStatus: "pending",
+			}
+			if err := h.store.CreateWebhookLog(persistCtx, wl); err != nil {
+				zerolog.Ctx(persistCtx).Error().
+					Err(err).
+					Str("step", "persist_webhook_log").
+					Str("webhook_log_id", wl.ID).
+					Msg("failed to persist webhook log — skipping dispatch")
+				return
+			}
+
+			// 3. Fire-and-forget dispatch (DispatchAsync starts its own goroutine).
+			webhook.DispatchAsync(persistCtx, h.dispatcher, h.store, wl, result.WebhookDelayMs)
+
+			if result.DuplicateWebhook {
+				wl2 := &store.WebhookLog{
 					ID:             uuid.NewString(),
 					RequestLogID:   reqLog.ID,
 					Payload:        payload,
 					TargetURL:      targetURL,
-					DeliveryStatus: "pending",
+					DeliveryStatus: "duplicate",
 				}
-				log.Info().
-					Str("step", "webhook_scheduled").
-					Str("webhook_log_id", wl.ID).
-					Str("target_url", targetURL).
-					Int("delay_ms", result.WebhookDelayMs).
-					Msg("webhook dispatch scheduled")
-
-				go func(ctx context.Context, l *store.WebhookLog) {
-					if err := h.store.CreateWebhookLog(ctx, l); err != nil {
-						zerolog.Ctx(ctx).Error().
-							Err(err).
-							Str("step", "persist_webhook_log").
-							Str("webhook_log_id", l.ID).
-							Msg("failed to persist webhook log")
-					}
-				}(persistCtx, wl)
-				webhook.DispatchAsync(persistCtx, h.dispatcher, h.store, wl, result.WebhookDelayMs)
-
-				if result.DuplicateWebhook {
-					wl2 := &store.WebhookLog{
-						ID:             uuid.NewString(),
-						RequestLogID:   reqLog.ID,
-						Payload:        payload,
-						TargetURL:      targetURL,
-						DeliveryStatus: "duplicate",
-					}
-					go func(ctx context.Context, l *store.WebhookLog) {
-						if err := h.store.CreateWebhookLog(ctx, l); err != nil {
-							zerolog.Ctx(ctx).Error().
-								Err(err).
-								Str("step", "persist_webhook_log_duplicate").
-								Str("webhook_log_id", l.ID).
-								Msg("failed to persist duplicate webhook log")
-						}
-					}(persistCtx, wl2)
-					webhook.DispatchAsync(persistCtx, h.dispatcher, h.store, wl2, result.WebhookDelayMs+500)
+				if err := h.store.CreateWebhookLog(persistCtx, wl2); err != nil {
+					zerolog.Ctx(persistCtx).Error().
+						Err(err).
+						Str("step", "persist_webhook_log_duplicate").
+						Str("webhook_log_id", wl2.ID).
+						Msg("failed to persist duplicate webhook log")
+					return
 				}
+				webhook.DispatchAsync(persistCtx, h.dispatcher, h.store, wl2, result.WebhookDelayMs+500)
 			}
-		}
+		}()
 	}
 
 	log.Info().

@@ -30,8 +30,13 @@ param(
     [int]$Users = 3,
     [int]$RequestsPerUser = 2,
     [string]$ApiBase = 'http://localhost:7700',
-    [int]$ListenerPort = 9999
+    [int]$ListenerPort = 9999,
+    # When set, all gateway webhooks for all users are pointed at this single
+    # URL (useful for webhook.site inspection). The local listener is skipped.
+    [string]$WebhookURL = 'https://webhook.site/d2c50235-b68a-4af3-a182-206cc01052cb'
 )
+
+$UseRemote = -not [string]::IsNullOrEmpty($WebhookURL)
 
 $ErrorActionPreference = 'Stop'
 Write-Host "=== TestPay load test ===" -ForegroundColor Cyan
@@ -39,34 +44,43 @@ Write-Host "API:                   $ApiBase"
 Write-Host "Users:                 $Users"
 Write-Host "Per user per gateway:  $RequestsPerUser"
 Write-Host "Gateways:              stripe, razorpay, agnostic"
-Write-Host "Listener:              http://localhost:$ListenerPort"
+if ($UseRemote) {
+    Write-Host "Webhook target:        $WebhookURL  (remote — open in browser to inspect)"
+} else {
+    Write-Host "Webhook target:        http://localhost:$ListenerPort (local listener)"
+}
 Write-Host ''
 
-# ── Listener (in-process) ────────────────────────────────────────────────────
+# ── Listener (in-process, only when not using a remote webhook URL) ──────────
 $counters  = [System.Collections.Concurrent.ConcurrentDictionary[string, int]]::new()
 $payloads  = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
-$listener  = [System.Net.HttpListener]::new()
-$listener.Prefixes.Add("http://localhost:$ListenerPort/")
-try { $listener.Start() } catch {
-    Write-Error "Failed to start listener on :$ListenerPort. $_"; exit 1
-}
+$listener  = $null
+$listenerJob = $null
 
-$listenerJob = Start-Job -ScriptBlock {
-    param($listener, $counters, $payloads)
-    while ($listener.IsListening) {
-        try {
-            $ctx    = $listener.GetContext()
-            $path   = $ctx.Request.Url.AbsolutePath.TrimStart('/')
-            $null   = $counters.AddOrUpdate($path, 1, { param($k, $v) $v + 1 })
-            $reader = [System.IO.StreamReader]::new($ctx.Request.InputStream)
-            $body   = $reader.ReadToEnd()
-            $reader.Dispose()
-            $null   = $payloads.TryAdd($path + "#" + $counters[$path], $body)
-            $ctx.Response.StatusCode = 200
-            $ctx.Response.Close()
-        } catch { break }
+if (-not $UseRemote) {
+    $listener = [System.Net.HttpListener]::new()
+    $listener.Prefixes.Add("http://localhost:$ListenerPort/")
+    try { $listener.Start() } catch {
+        Write-Error "Failed to start listener on :$ListenerPort. $_"; exit 1
     }
-} -ArgumentList $listener, $counters, $payloads
+
+    $listenerJob = Start-Job -ScriptBlock {
+        param($listener, $counters, $payloads)
+        while ($listener.IsListening) {
+            try {
+                $ctx    = $listener.GetContext()
+                $path   = $ctx.Request.Url.AbsolutePath.TrimStart('/')
+                $null   = $counters.AddOrUpdate($path, 1, { param($k, $v) $v + 1 })
+                $reader = [System.IO.StreamReader]::new($ctx.Request.InputStream)
+                $body   = $reader.ReadToEnd()
+                $reader.Dispose()
+                $null   = $payloads.TryAdd($path + "#" + $counters[$path], $body)
+                $ctx.Response.StatusCode = 200
+                $ctx.Response.Close()
+            } catch { break }
+        }
+    } -ArgumentList $listener, $counters, $payloads
+}
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 function Invoke-Json {
@@ -105,10 +119,21 @@ for ($i = 1; $i -le $Users; $i++) {
     }
 
     $userKey = "user$i-$suffix"
-    $hooks   = @{
-        stripe   = "http://localhost:$ListenerPort/$userKey-stripe"
-        razorpay = "http://localhost:$ListenerPort/$userKey-razorpay"
-        agnostic = "http://localhost:$ListenerPort/$userKey-agnostic"
+    if ($UseRemote) {
+        # All gateways for this user share the remote URL; you'll see them all
+        # land on the same webhook.site page, tagged by gateway + user in the
+        # echoed metadata/notes/body of the webhook payload.
+        $hooks = @{
+            stripe   = $WebhookURL
+            razorpay = $WebhookURL
+            agnostic = $WebhookURL
+        }
+    } else {
+        $hooks = @{
+            stripe   = "http://localhost:$ListenerPort/$userKey-stripe"
+            razorpay = "http://localhost:$ListenerPort/$userKey-razorpay"
+            agnostic = "http://localhost:$ListenerPort/$userKey-agnostic"
+        }
     }
     # Authenticate via api_key (Authorization: Bearer) — more reliable across
     # PowerShell WebSession quirks than the signup cookie.
@@ -168,52 +193,71 @@ Write-Host "  $sent charges sent in $([math]::Round($sw.Elapsed.TotalSeconds, 2)
 
 # ── 3. Wait for webhooks ─────────────────────────────────────────────────────
 Write-Host ''
-Write-Host 'Waiting up to 10s for webhooks to arrive...' -ForegroundColor Yellow
-$deadline = (Get-Date).AddSeconds(10)
-while ((Get-Date) -lt $deadline) {
-    $received = 0
-    foreach ($u in $userData) {
-        foreach ($gw in $gateways) {
-            $received += $counters["$($u.Key)-$($gw.Name)"]
+if ($UseRemote) {
+    Write-Host 'Waiting 5s for server-side dispatch...' -ForegroundColor Yellow
+    Start-Sleep -Seconds 5
+} else {
+    Write-Host 'Waiting up to 10s for webhooks to arrive...' -ForegroundColor Yellow
+    $deadline = (Get-Date).AddSeconds(10)
+    while ((Get-Date) -lt $deadline) {
+        $received = 0
+        foreach ($u in $userData) {
+            foreach ($gw in $gateways) {
+                $received += $counters["$($u.Key)-$($gw.Name)"]
+            }
         }
+        if ($received -ge $totalExpected) { break }
+        Start-Sleep -Milliseconds 500
     }
-    if ($received -ge $totalExpected) { break }
-    Start-Sleep -Milliseconds 500
 }
 
 # ── 4. Report ────────────────────────────────────────────────────────────────
 Write-Host ''
 Write-Host '=== Results ===' -ForegroundColor Cyan
 $totalReceived = 0
-foreach ($u in $userData) {
-    foreach ($gw in $gateways) {
-        $key = "$($u.Key)-$($gw.Name)"
-        $n   = $counters[$key]
-        if (-not $n) { $n = 0 }
-        $totalReceived += $n
-        $status = if ($n -eq $RequestsPerUser) { 'OK' } else { 'MISS' }
-        Write-Host ("  [{0}] {1,-40} {2,-9} sent={3} received={4}" -f $status, $u.Email, $gw.Name, $RequestsPerUser, $n)
+if ($UseRemote) {
+    Write-Host "  (Remote webhook URL — inspect delivery here:)"
+    Write-Host "  $WebhookURL" -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host "  Each user fired $RequestsPerUser requests per gateway × $($gateways.Count) gateways = $($RequestsPerUser * $gateways.Count) webhooks/user."
+    foreach ($u in $userData) {
+        Write-Host ("  - {0,-40} expects {1} webhooks with order_id prefix ord-{2}-*" -f $u.Email, ($RequestsPerUser * $gateways.Count), $u.Key)
+    }
+} else {
+    foreach ($u in $userData) {
+        foreach ($gw in $gateways) {
+            $key = "$($u.Key)-$($gw.Name)"
+            $n   = $counters[$key]
+            if (-not $n) { $n = 0 }
+            $totalReceived += $n
+            $status = if ($n -eq $RequestsPerUser) { 'OK' } else { 'MISS' }
+            Write-Host ("  [{0}] {1,-40} {2,-9} sent={3} received={4}" -f $status, $u.Email, $gw.Name, $RequestsPerUser, $n)
+        }
     }
 }
 
 Write-Host ''
 Write-Host "Total charges sent:       $sent"
-Write-Host "Total webhooks received:  $totalReceived (expected $totalExpected)"
+if (-not $UseRemote) {
+    Write-Host "Total webhooks received:  $totalReceived (expected $totalExpected)"
+}
 
 # Sample echoed metadata from one webhook (proves the order_id round-trips)
-$sampleKey = "$($userData[0].Key)-stripe#1"
-$sample    = $payloads[$sampleKey]
-if ($sample) {
-    Write-Host ''
-    Write-Host 'Sample Stripe webhook payload (first request from first user):' -ForegroundColor Yellow
-    try {
-        $obj = $sample | ConvertFrom-Json
-        $md  = $obj.data.object.metadata
-        Write-Host "  event type:          $($obj.type)"
-        Write-Host "  echoed order_id:     $($md.order_id)"
-        Write-Host "  payment_intent id:   $($obj.data.object.id)"
-    } catch {
-        Write-Host ($sample.Substring(0, [Math]::Min(400, $sample.Length)))
+if (-not $UseRemote) {
+    $sampleKey = "$($userData[0].Key)-stripe#1"
+    $sample    = $payloads[$sampleKey]
+    if ($sample) {
+        Write-Host ''
+        Write-Host 'Sample Stripe webhook payload (first request from first user):' -ForegroundColor Yellow
+        try {
+            $obj = $sample | ConvertFrom-Json
+            $md  = $obj.data.object.metadata
+            Write-Host "  event type:          $($obj.type)"
+            Write-Host "  echoed order_id:     $($md.order_id)"
+            Write-Host "  payment_intent id:   $($obj.data.object.id)"
+        } catch {
+            Write-Host ($sample.Substring(0, [Math]::Min(400, $sample.Length)))
+        }
     }
 }
 
@@ -225,11 +269,17 @@ try {
 }
 
 # ── 5. Cleanup ───────────────────────────────────────────────────────────────
-$listener.Stop()
-Stop-Job   -Job $listenerJob -ErrorAction SilentlyContinue | Out-Null
-Remove-Job -Job $listenerJob -ErrorAction SilentlyContinue | Out-Null
+if ($listener)    { $listener.Stop() }
+if ($listenerJob) {
+    Stop-Job   -Job $listenerJob -ErrorAction SilentlyContinue | Out-Null
+    Remove-Job -Job $listenerJob -ErrorAction SilentlyContinue | Out-Null
+}
 
-if ($totalReceived -eq $totalExpected) {
+if ($UseRemote) {
+    Write-Host ''
+    Write-Host 'DONE — open the webhook URL above in a browser to inspect deliveries.' -ForegroundColor Green
+    exit 0
+} elseif ($totalReceived -eq $totalExpected) {
     Write-Host ''; Write-Host 'PASS' -ForegroundColor Green; exit 0
 } else {
     Write-Host ''; Write-Host 'PARTIAL / FAIL — some webhooks did not arrive within the timeout.' -ForegroundColor Red; exit 2

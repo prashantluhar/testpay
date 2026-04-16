@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"errors"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,9 +25,18 @@ const slowQueryThreshold = 100 * time.Millisecond
 
 // logSlow emits an error log if err != nil, or a warning if the query exceeded
 // the slow-query threshold. Called at the bottom of every store method.
+// "no rows" results are demoted to debug — they're an expected outcome for
+// existence/lookup checks (e.g. uniqueness validation, "is there a session?").
 func logSlow(ctx context.Context, queryName string, start time.Time, err error) {
 	elapsed := time.Since(start)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			zerolog.Ctx(ctx).Debug().
+				Str("query", queryName).
+				Int64("duration_ms", elapsed.Milliseconds()).
+				Msg("store query: no rows")
+			return
+		}
 		zerolog.Ctx(ctx).Error().
 			Err(err).
 			Str("query", queryName).
