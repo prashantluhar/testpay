@@ -85,7 +85,7 @@ export default function ScenariosPage() {
                     <Play className="h-4 w-4" />
                   </Button>
                   <Button size="sm" variant="ghost" asChild>
-                    <Link href={`/scenarios/${s.id}`}>
+                    <Link href={`/scenarios/edit?id=${s.id}`}>
                       <Pencil className="h-4 w-4" />
                     </Link>
                   </Button>
