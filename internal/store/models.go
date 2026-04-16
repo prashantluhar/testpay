@@ -3,11 +3,11 @@ package store
 import "time"
 
 type Workspace struct {
-	ID         string    `json:"id"`
-	Slug       string    `json:"slug"`
-	APIKey     string    `json:"api_key"`
-	WebhookURL string    `json:"webhook_url"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID          string            `json:"id"`
+	Slug        string            `json:"slug"`
+	APIKey      string            `json:"api_key"`
+	WebhookURLs map[string]string `json:"webhook_urls"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 type User struct {

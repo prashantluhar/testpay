@@ -10,8 +10,8 @@ import (
 
 type Adapter struct{}
 
-func New() *Adapter         { return &Adapter{} }
-func (a *Adapter) Name() string { return "agnostic" }
+func New() *Adapter              { return &Adapter{} }
+func (a *Adapter) Name() string  { return "agnostic" }
 
 func (a *Adapter) BuildResponse(result *engine.Result, body []byte) (int, []byte, map[string]string) {
 	headers := map[string]string{"Content-Type": "application/json"}
@@ -30,12 +30,13 @@ func (a *Adapter) BuildResponse(result *engine.Result, body []byte) (int, []byte
 	return result.HTTPStatus, resp, headers
 }
 
-func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, amount int64, currency string) map[string]any {
+func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, amount int64, currency string, requestBody map[string]any) map[string]any {
 	event := "transaction.success"
 	if result.HTTPStatus >= 400 {
 		event = "transaction.failed"
 	}
-	return map[string]any{
+
+	out := map[string]any{
 		"event":      event,
 		"id":         chargeID,
 		"amount":     amount,
@@ -43,4 +44,11 @@ func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, am
 		"timestamp":  time.Now().Unix(),
 		"error_code": result.ErrorCode,
 	}
+
+	// Agnostic: echo the full request body so caller can pluck whatever fields
+	// they care about (order_id, customer_id, anything).
+	if requestBody != nil {
+		out["request_echo"] = requestBody
+	}
+	return out
 }

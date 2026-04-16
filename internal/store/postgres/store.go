@@ -46,9 +46,14 @@ func logSlow(ctx context.Context, queryName string, start time.Time, err error) 
 
 func (s *Store) CreateWorkspace(ctx context.Context, w *store.Workspace) error {
 	start := time.Now()
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO workspaces (id, slug, api_key, webhook_url) VALUES ($1, $2, $3, $4)`,
-		w.ID, w.Slug, w.APIKey, w.WebhookURL,
+	urls, err := json.Marshal(normaliseWebhookURLs(w.WebhookURLs))
+	if err != nil {
+		logSlow(ctx, "CreateWorkspace", start, err)
+		return err
+	}
+	_, err = s.pool.Exec(ctx,
+		`INSERT INTO workspaces (id, slug, api_key, webhook_urls) VALUES ($1, $2, $3, $4)`,
+		w.ID, w.Slug, w.APIKey, urls,
 	)
 	logSlow(ctx, "CreateWorkspace", start, err)
 	return err
@@ -57,7 +62,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, w *store.Workspace) error {
 func (s *Store) GetWorkspaceByAPIKey(ctx context.Context, apiKey string) (*store.Workspace, error) {
 	start := time.Now()
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, slug, api_key, webhook_url, created_at FROM workspaces WHERE api_key = $1`, apiKey)
+		`SELECT id, slug, api_key, webhook_urls, created_at FROM workspaces WHERE api_key = $1`, apiKey)
 	ws, err := scanWorkspace(row)
 	logSlow(ctx, "GetWorkspaceByAPIKey", start, err)
 	return ws, err
@@ -66,7 +71,7 @@ func (s *Store) GetWorkspaceByAPIKey(ctx context.Context, apiKey string) (*store
 func (s *Store) GetWorkspaceBySlug(ctx context.Context, slug string) (*store.Workspace, error) {
 	start := time.Now()
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, slug, api_key, webhook_url, created_at FROM workspaces WHERE slug = $1`, slug)
+		`SELECT id, slug, api_key, webhook_urls, created_at FROM workspaces WHERE slug = $1`, slug)
 	ws, err := scanWorkspace(row)
 	logSlow(ctx, "GetWorkspaceBySlug", start, err)
 	return ws, err
@@ -75,19 +80,24 @@ func (s *Store) GetWorkspaceBySlug(ctx context.Context, slug string) (*store.Wor
 func (s *Store) GetWorkspaceByID(ctx context.Context, id string) (*store.Workspace, error) {
 	start := time.Now()
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, slug, api_key, webhook_url, created_at FROM workspaces WHERE id = $1`, id)
+		`SELECT id, slug, api_key, webhook_urls, created_at FROM workspaces WHERE id = $1`, id)
 	ws, err := scanWorkspace(row)
 	logSlow(ctx, "GetWorkspaceByID", start, err)
 	return ws, err
 }
 
-// UpdateWorkspace persists changes to the mutable workspace fields.
-// Currently only WebhookURL is editable; slug and api_key are immutable after create.
+// UpdateWorkspace persists changes to mutable workspace fields.
+// Currently only WebhookURLs is editable; slug and api_key are immutable after create.
 func (s *Store) UpdateWorkspace(ctx context.Context, w *store.Workspace) error {
 	start := time.Now()
-	_, err := s.pool.Exec(ctx,
-		`UPDATE workspaces SET webhook_url = $1 WHERE id = $2`,
-		w.WebhookURL, w.ID,
+	urls, err := json.Marshal(normaliseWebhookURLs(w.WebhookURLs))
+	if err != nil {
+		logSlow(ctx, "UpdateWorkspace", start, err)
+		return err
+	}
+	_, err = s.pool.Exec(ctx,
+		`UPDATE workspaces SET webhook_urls = $1 WHERE id = $2`,
+		urls, w.ID,
 	)
 	logSlow(ctx, "UpdateWorkspace", start, err)
 	return err
@@ -95,10 +105,23 @@ func (s *Store) UpdateWorkspace(ctx context.Context, w *store.Workspace) error {
 
 func scanWorkspace(row pgx.Row) (*store.Workspace, error) {
 	var w store.Workspace
-	if err := row.Scan(&w.ID, &w.Slug, &w.APIKey, &w.WebhookURL, &w.CreatedAt); err != nil {
+	var urlsRaw []byte
+	if err := row.Scan(&w.ID, &w.Slug, &w.APIKey, &urlsRaw, &w.CreatedAt); err != nil {
 		return nil, fmt.Errorf("workspace not found: %w", err)
 	}
+	w.WebhookURLs = map[string]string{}
+	if len(urlsRaw) > 0 {
+		_ = json.Unmarshal(urlsRaw, &w.WebhookURLs)
+	}
 	return &w, nil
+}
+
+// normaliseWebhookURLs guarantees a non-nil map so JSONB stores '{}' rather than 'null'.
+func normaliseWebhookURLs(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
 }
 
 // ── Scenarios ────────────────────────────────────────────────────────────────

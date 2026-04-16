@@ -27,6 +27,10 @@ func TestBuildResponse_decline(t *testing.T) {
 func TestBuildWebhookPayload_success(t *testing.T) {
 	a := stripe.New()
 	result := &engine.Result{Mode: engine.ModeSuccess, HTTPStatus: 200}
-	payload := a.BuildWebhookPayload(result, "ch_test_123", 5000, "usd")
+	reqBody := map[string]any{"metadata": map[string]any{"order_id": "ord_42"}}
+	payload := a.BuildWebhookPayload(result, "ch_test_123", 5000, "usd", reqBody)
 	assert.Equal(t, "payment_intent.succeeded", payload["type"])
+	obj := payload["data"].(map[string]any)["object"].(map[string]any)
+	md := obj["metadata"].(map[string]any)
+	assert.Equal(t, "ord_42", md["order_id"])
 }

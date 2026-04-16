@@ -13,17 +13,28 @@ import { MODE } from '@/lib/types';
 import { api, ApiError } from '@/lib/api';
 import { mutate } from 'swr';
 
+const GATEWAYS = ['stripe', 'razorpay', 'agnostic'] as const;
+type Gateway = (typeof GATEWAYS)[number];
+
 export default function SettingsPage() {
   const { data } = useMe();
   const { theme, setTheme } = useTheme();
-  const [webhookUrl, setWebhookUrl] = useState('');
+  const [urls, setUrls] = useState<Record<Gateway, string>>({
+    stripe: '',
+    razorpay: '',
+    agnostic: '',
+  });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (data?.workspace?.webhook_url !== undefined) {
-      setWebhookUrl(data.workspace.webhook_url);
+    if (data?.workspace?.webhook_urls) {
+      setUrls({
+        stripe: data.workspace.webhook_urls.stripe ?? '',
+        razorpay: data.workspace.webhook_urls.razorpay ?? '',
+        agnostic: data.workspace.webhook_urls.agnostic ?? '',
+      });
     }
-  }, [data?.workspace?.webhook_url]);
+  }, [data?.workspace?.webhook_urls]);
 
   if (!data) return null;
   const { workspace, user } = data;
@@ -31,14 +42,14 @@ export default function SettingsPage() {
   const baseUrl =
     MODE === 'local' ? 'http://localhost:7700' : `https://api.testpay.dev/ws_${workspace.slug}`;
 
-  async function saveWebhook() {
+  async function saveWebhooks() {
     setSaving(true);
     try {
       await api('/api/workspace', {
         method: 'PUT',
-        body: JSON.stringify({ webhook_url: webhookUrl }),
+        body: JSON.stringify({ webhook_urls: urls }),
       });
-      toast.success('Webhook URL saved');
+      toast.success('Webhook URLs saved');
       mutate('/api/auth/me');
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'save failed');
@@ -68,8 +79,8 @@ export default function SettingsPage() {
               <ApiKeyReveal value={workspace.api_key} />
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Send as <code className="font-mono">Authorization: Bearer …</code> on your mock requests
-              to attribute them to this workspace.
+              Send as <code className="font-mono">Authorization: Bearer …</code> on your mock
+              requests to attribute them to this workspace.
             </p>
           </div>
         </CardContent>
@@ -77,28 +88,47 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Webhook destination</CardTitle>
+          <CardTitle className="text-base">Webhook destinations</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label htmlFor="webhook-url">Default webhook URL</Label>
-            <div className="flex gap-2 mt-1">
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Each gateway gets its own webhook URL. The per-request{' '}
+            <code className="font-mono">X-Webhook-URL</code> header overrides this for one call.
+          </p>
+          {GATEWAYS.map((g) => (
+            <div key={g}>
+              <Label htmlFor={`webhook-${g}`} className="capitalize">
+                {g}
+              </Label>
               <Input
-                id="webhook-url"
+                id={`webhook-${g}`}
                 type="url"
-                placeholder="https://your-app.example.com/webhook"
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-                className="font-mono"
+                placeholder={`https://your-app.example.com/webhooks/${g}`}
+                value={urls[g]}
+                onChange={(e) => setUrls((prev) => ({ ...prev, [g]: e.target.value }))}
+                className="font-mono mt-1"
               />
-              <Button onClick={saveWebhook} disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Webhooks for this workspace are POSTed here. Per-request{' '}
-              <code className="font-mono">X-Webhook-URL</code> header overrides this for one call.
-            </p>
+          ))}
+          <Button onClick={saveWebhooks} disabled={saving}>
+            {saving ? 'Saving…' : 'Save webhook URLs'}
+          </Button>
+          <div className="border-t pt-3 space-y-1">
+            <p className="text-xs font-semibold">Echoed fields in the webhook payload:</p>
+            <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
+              <li>
+                <b>Stripe:</b> <code className="font-mono">metadata</code> →{' '}
+                <code className="font-mono">data.object.metadata</code>
+              </li>
+              <li>
+                <b>Razorpay:</b> <code className="font-mono">notes</code> →{' '}
+                <code className="font-mono">payload.payment.entity.notes</code>
+              </li>
+              <li>
+                <b>Agnostic:</b> full request body →{' '}
+                <code className="font-mono">request_echo</code>
+              </li>
+            </ul>
           </div>
         </CardContent>
       </Card>
@@ -108,7 +138,7 @@ export default function SettingsPage() {
           <CardTitle className="text-base">Endpoints</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {['stripe', 'razorpay', 'agnostic'].map((g) => {
+          {GATEWAYS.map((g) => {
             const url = g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`;
             return (
               <div key={g} className="flex items-center gap-3">

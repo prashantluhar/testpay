@@ -19,6 +19,9 @@ func TestBuildResponse_success(t *testing.T) {
 func TestBuildWebhookPayload_success(t *testing.T) {
 	a := agnostic.New()
 	result := &engine.Result{Mode: engine.ModeSuccess, HTTPStatus: 200}
-	payload := a.BuildWebhookPayload(result, "txn_test", 5000, "usd")
+	reqBody := map[string]any{"order_id": "agn_9", "amount": 5000}
+	payload := a.BuildWebhookPayload(result, "txn_test", 5000, "usd", reqBody)
 	assert.Equal(t, "transaction.success", payload["event"])
+	echo := payload["request_echo"].(map[string]any)
+	assert.Equal(t, "agn_9", echo["order_id"])
 }

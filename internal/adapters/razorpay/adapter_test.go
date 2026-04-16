@@ -19,6 +19,10 @@ func TestBuildResponse_success(t *testing.T) {
 func TestBuildWebhookPayload_success(t *testing.T) {
 	a := razorpay.New()
 	result := &engine.Result{Mode: engine.ModeSuccess}
-	payload := a.BuildWebhookPayload(result, "pay_test", 5000, "INR")
+	reqBody := map[string]any{"notes": map[string]any{"order_id": "rzp_1"}}
+	payload := a.BuildWebhookPayload(result, "pay_test", 5000, "INR", reqBody)
 	assert.Equal(t, "payment.captured", payload["event"])
+	entity := payload["payload"].(map[string]any)["payment"].(map[string]any)["entity"].(map[string]any)
+	notes := entity["notes"].(map[string]any)
+	assert.Equal(t, "rzp_1", notes["order_id"])
 }

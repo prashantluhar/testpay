@@ -36,35 +36,58 @@ func GetWorkspace(s store.Store) http.HandlerFunc {
 }
 
 // UpdateWorkspace lets the authenticated user edit mutable workspace fields.
-// Currently only WebhookURL is editable.
+// Currently only WebhookURLs (a gateway → URL map) is editable.
+//
+// Accepted body shapes:
+//
+//	{"webhook_urls": {"stripe": "https://...", "razorpay": "...", "agnostic": "..."}}
+//
+// Unknown gateway keys are stored as-is (for future adapter additions).
+// Empty-string values clear the entry for that gateway.
 func UpdateWorkspace(s store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		zerolog.Ctx(ctx).Info().Str("handler", "UpdateWorkspace").Msg("handler entry")
+		log := zerolog.Ctx(ctx)
+		log.Info().Str("handler", "UpdateWorkspace").Str("step", "entry").Msg("handler entry")
 
 		var body struct {
-			WebhookURL string `json:"webhook_url"`
+			WebhookURLs map[string]string `json:"webhook_urls"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			zerolog.Ctx(ctx).Error().Err(err).Msg("invalid body")
+			log.Error().Err(err).Str("step", "decode").Msg("invalid body")
 			http.Error(w, `{"error":"invalid body"}`, 400)
 			return
 		}
 
 		ws, err := workspaceFromCtx(r, s)
 		if err != nil {
+			log.Error().Err(err).Str("step", "workspace_lookup").Msg("workspace not found")
 			http.Error(w, `{"error":"workspace not found"}`, 404)
 			return
 		}
-		ws.WebhookURL = body.WebhookURL
+
+		if body.WebhookURLs != nil {
+			// Normalise: drop empty-string entries so they disappear from the map.
+			clean := make(map[string]string, len(body.WebhookURLs))
+			for k, v := range body.WebhookURLs {
+				if v != "" {
+					clean[k] = v
+				}
+			}
+			ws.WebhookURLs = clean
+		}
 
 		if err := s.UpdateWorkspace(ctx, ws); err != nil {
-			zerolog.Ctx(ctx).Error().Err(err).Msg("update workspace failed")
+			log.Error().Err(err).Str("step", "persist").Msg("update workspace failed")
 			http.Error(w, `{"error":"update failed"}`, 500)
 			return
 		}
 
-		zerolog.Ctx(ctx).Info().Str("workspace_id", ws.ID).Msg("handler exit")
+		log.Info().
+			Str("workspace_id", ws.ID).
+			Str("step", "exit").
+			Interface("webhook_urls", ws.WebhookURLs).
+			Msg("handler exit")
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(ws)
 	}

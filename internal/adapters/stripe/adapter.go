@@ -10,8 +10,8 @@ import (
 
 type Adapter struct{}
 
-func New() *Adapter         { return &Adapter{} }
-func (a *Adapter) Name() string { return "stripe" }
+func New() *Adapter              { return &Adapter{} }
+func (a *Adapter) Name() string  { return "stripe" }
 
 func (a *Adapter) BuildResponse(result *engine.Result, body []byte) (int, []byte, map[string]string) {
 	headers := map[string]string{"Content-Type": "application/json"}
@@ -27,11 +27,15 @@ func (a *Adapter) BuildResponse(result *engine.Result, body []byte) (int, []byte
 		return result.HTTPStatus, errBody, headers
 	}
 
+	amount, currency := extractAmountCurrency(body)
+
 	if result.IsPending {
 		respBody, _ := json.Marshal(map[string]any{
-			"id":     fmt.Sprintf("pi_%d", time.Now().UnixNano()),
-			"object": "payment_intent",
-			"status": "processing",
+			"id":       fmt.Sprintf("pi_%d", time.Now().UnixNano()),
+			"object":   "payment_intent",
+			"status":   "processing",
+			"amount":   amount,
+			"currency": currency,
 		})
 		return 200, respBody, headers
 	}
@@ -40,13 +44,13 @@ func (a *Adapter) BuildResponse(result *engine.Result, body []byte) (int, []byte
 		"id":       fmt.Sprintf("pi_%d", time.Now().UnixNano()),
 		"object":   "payment_intent",
 		"status":   "succeeded",
-		"amount":   5000,
-		"currency": "usd",
+		"amount":   amount,
+		"currency": currency,
 	})
 	return 200, respBody, headers
 }
 
-func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, amount int64, currency string) map[string]any {
+func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, amount int64, currency string, requestBody map[string]any) map[string]any {
 	eventType := "payment_intent.succeeded"
 	if result.IsPending {
 		eventType = "payment_intent.processing"
@@ -55,18 +59,32 @@ func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, am
 		eventType = "payment_intent.payment_failed"
 	}
 
+	// Echo caller-supplied metadata (matches real Stripe behavior).
+	metadata := map[string]any{}
+	if requestBody != nil {
+		if md, ok := requestBody["metadata"].(map[string]any); ok {
+			metadata = md
+		}
+	}
+
+	object := map[string]any{
+		"id":       chargeID,
+		"object":   "payment_intent",
+		"amount":   amount,
+		"currency": currency,
+		"status":   statusFromMode(result.Mode),
+		"metadata": metadata,
+	}
+	if requestBody != nil {
+		object["request_echo"] = requestBody
+	}
+
 	return map[string]any{
 		"id":      fmt.Sprintf("evt_%d", time.Now().UnixNano()),
 		"type":    eventType,
 		"created": time.Now().Unix(),
 		"data": map[string]any{
-			"object": map[string]any{
-				"id":       chargeID,
-				"object":   "payment_intent",
-				"amount":   amount,
-				"currency": currency,
-				"status":   statusFromMode(result.Mode),
-			},
+			"object": object,
 		},
 	}
 }
@@ -103,4 +121,30 @@ func statusFromMode(mode engine.FailureMode) string {
 	default:
 		return "succeeded"
 	}
+}
+
+// extractAmountCurrency pulls amount + currency from the request body
+// (with sensible defaults) so the mock response reflects the caller's intent.
+func extractAmountCurrency(body []byte) (int64, string) {
+	var amount int64 = 5000
+	currency := "usd"
+	if len(body) == 0 {
+		return amount, currency
+	}
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		return amount, currency
+	}
+	switch v := m["amount"].(type) {
+	case float64:
+		amount = int64(v)
+	case int64:
+		amount = v
+	case int:
+		amount = int64(v)
+	}
+	if c, ok := m["currency"].(string); ok && c != "" {
+		currency = c
+	}
+	return amount, currency
 }

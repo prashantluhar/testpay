@@ -2,7 +2,7 @@ export interface Workspace {
   id: string;
   slug: string;
   api_key: string;
-  webhook_url: string;
+  webhook_urls: Record<string, string>;
   created_at: string;
 }
 
