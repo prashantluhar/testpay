@@ -27,6 +27,9 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
 		}
+		if cfg.Server.Mode == "hosted" && cfg.Auth.JWTSecret == "" {
+			return fmt.Errorf("JWT_SECRET is required when mode=hosted (set via env var referenced by auth.jwt_secret_env)")
+		}
 		observability.Setup(cfg.Logging.Level, cfg.Logging.Format, cfg.Environment, "testpay")
 		log.Info().Str("environment", cfg.Environment).Msg("config loaded")
 
