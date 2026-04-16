@@ -72,6 +72,15 @@ func (s *Store) GetWorkspaceBySlug(ctx context.Context, slug string) (*store.Wor
 	return ws, err
 }
 
+func (s *Store) GetWorkspaceByID(ctx context.Context, id string) (*store.Workspace, error) {
+	start := time.Now()
+	row := s.pool.QueryRow(ctx,
+		`SELECT id, slug, api_key, created_at FROM workspaces WHERE id = $1`, id)
+	ws, err := scanWorkspace(row)
+	logSlow(ctx, "GetWorkspaceByID", start, err)
+	return ws, err
+}
+
 func scanWorkspace(row pgx.Row) (*store.Workspace, error) {
 	var w store.Workspace
 	if err := row.Scan(&w.ID, &w.Slug, &w.APIKey, &w.CreatedAt); err != nil {
