@@ -36,15 +36,16 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 	r.Use(middleware.Session(cfg.Auth.JWTSecret, cfg.Server.Mode))
 	r.Use(middleware.Auth(cfg.Server.Mode, cfg.Auth.APIKey))
 
-	// Mock gateway endpoints (Stripe, Razorpay, Agnostic).
-	// The handler uses the original URL path (including /stripe, /razorpay, /v1)
-	// to resolve the gateway adapter — don't strip the prefix.
+	// Mock gateway endpoints — one /{gateway}/* route per registered adapter.
+	// The handler uses the original URL path to resolve the gateway; don't
+	// strip the prefix.
 	mockHandler := handlers.NewMock(eng, reg, s, dispatcher)
-	r.Handle("/stripe/*", mockHandler)
-	r.Handle("/razorpay/*", mockHandler)
-	r.Handle("/adyen/*", mockHandler)
-	r.Handle("/omise/*", mockHandler)
-	r.Handle("/mastercard/*", mockHandler)
+	for _, g := range reg.KnownGateways() {
+		if g == "agnostic" {
+			continue // agnostic is reached via /v1/*
+		}
+		r.Handle("/"+g+"/*", mockHandler)
+	}
 	r.Handle("/v1/*", mockHandler)
 
 	// Control API — /api/auth/* stays open; everything else requires a session.
