@@ -110,8 +110,11 @@ for ($i = 1; $i -le $Users; $i++) {
         razorpay = "http://localhost:$ListenerPort/$userKey-razorpay"
         agnostic = "http://localhost:$ListenerPort/$userKey-agnostic"
     }
+    # Authenticate via api_key (Authorization: Bearer) — more reliable across
+    # PowerShell WebSession quirks than the signup cookie.
     Invoke-Json -Method PUT -Url "$ApiBase/api/workspace" `
-        -Body @{ webhook_urls = $hooks } -Session $session | Out-Null
+        -Body @{ webhook_urls = $hooks } `
+        -Headers @{ Authorization = "Bearer $($signup.workspace.api_key)" } | Out-Null
 
     $userData += [pscustomobject]@{
         Email  = $email

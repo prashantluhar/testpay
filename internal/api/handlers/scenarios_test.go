@@ -27,6 +27,19 @@ func (m *mockStore) CreateScenario(_ context.Context, s *store.Scenario) error {
 	return nil
 }
 
+// The WorkspaceIDFromRequest helper (used by ListScenarios for scoping) walks
+// Bearer → session-ctx → GetWorkspaceBySlug("local"). Stub enough of those so
+// calls don't panic through the nil store.Store interface.
+func (m *mockStore) GetWorkspaceByAPIKey(_ context.Context, _ string) (*store.Workspace, error) {
+	return nil, assert.AnError
+}
+func (m *mockStore) GetWorkspaceByID(_ context.Context, _ string) (*store.Workspace, error) {
+	return nil, assert.AnError
+}
+func (m *mockStore) GetWorkspaceBySlug(_ context.Context, _ string) (*store.Workspace, error) {
+	return &store.Workspace{ID: store.LocalWorkspaceID, Slug: "local"}, nil
+}
+
 func TestListScenarios_returnsJSON(t *testing.T) {
 	ms := &mockStore{scenarios: []*store.Scenario{
 		{ID: "1", Name: "retry-storm"},

@@ -1,29 +1,64 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/prashantluhar/testpay/internal/api/middleware"
 	"github.com/prashantluhar/testpay/internal/store"
 	"github.com/rs/zerolog"
 )
 
-// workspaceFromCtx resolves the current workspace. Uses the session's
-// workspace_id if available, otherwise falls back to the local workspace.
-func workspaceFromCtx(r *http.Request, s store.Store) (*store.Workspace, error) {
+// WorkspaceFromRequest resolves the workspace the current request should act on.
+// Priority:
+//  1. Authorization: Bearer <api_key>        → lookup by api_key
+//  2. Session cookie (Session middleware injects workspace_id into ctx) → by id
+//  3. Local fallback: the "local" workspace
+//
+// Exposed so other handlers can scope queries by caller's workspace.
+func WorkspaceFromRequest(r *http.Request, s store.Store) (*store.Workspace, error) {
 	ctx := r.Context()
+
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		apiKey := strings.TrimPrefix(auth, "Bearer ")
+		if apiKey != "" {
+			if ws, err := s.GetWorkspaceByAPIKey(ctx, apiKey); err == nil && ws != nil {
+				return ws, nil
+			}
+		}
+	}
 	if id, ok := middleware.WorkspaceIDFromContext(ctx); ok && id != "" {
 		return s.GetWorkspaceByID(ctx, id)
 	}
 	return s.GetWorkspaceBySlug(ctx, "local")
 }
 
+// WorkspaceIDFromRequest is a thin convenience wrapper returning just the ID.
+// Falls back to LocalWorkspaceID if lookup fails.
+func WorkspaceIDFromRequest(r *http.Request, s store.Store) string {
+	if ws, err := WorkspaceFromRequest(r, s); err == nil && ws != nil {
+		return ws.ID
+	}
+	return store.LocalWorkspaceID
+}
+
+// workspaceFromCtx is kept as a package-local shim for older callers; prefer
+// WorkspaceFromRequest in new code.
+func workspaceFromCtx(r *http.Request, s store.Store) (*store.Workspace, error) {
+	return WorkspaceFromRequest(r, s)
+}
+
+// ensureLocalWorkspaceContext is used by handlers that historically hardcoded
+// LocalWorkspaceID; left as a tiny helper so we can audit callers.
+func ensureLocalWorkspaceContext(ctx context.Context) context.Context { return ctx }
+
 func GetWorkspace(s store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		zerolog.Ctx(ctx).Info().Str("handler", "GetWorkspace").Msg("handler entry")
-		ws, err := workspaceFromCtx(r, s)
+		ws, err := WorkspaceFromRequest(r, s)
 		if err != nil {
 			zerolog.Ctx(ctx).Error().Err(err).Str("handler", "GetWorkspace").Msg("workspace not found")
 			http.Error(w, `{"error":"workspace not found"}`, 404)
@@ -35,15 +70,8 @@ func GetWorkspace(s store.Store) http.HandlerFunc {
 	}
 }
 
-// UpdateWorkspace lets the authenticated user edit mutable workspace fields.
+// UpdateWorkspace lets the authenticated caller edit mutable workspace fields.
 // Currently only WebhookURLs (a gateway → URL map) is editable.
-//
-// Accepted body shapes:
-//
-//	{"webhook_urls": {"stripe": "https://...", "razorpay": "...", "agnostic": "..."}}
-//
-// Unknown gateway keys are stored as-is (for future adapter additions).
-// Empty-string values clear the entry for that gateway.
 func UpdateWorkspace(s store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -59,7 +87,7 @@ func UpdateWorkspace(s store.Store) http.HandlerFunc {
 			return
 		}
 
-		ws, err := workspaceFromCtx(r, s)
+		ws, err := WorkspaceFromRequest(r, s)
 		if err != nil {
 			log.Error().Err(err).Str("step", "workspace_lookup").Msg("workspace not found")
 			http.Error(w, `{"error":"workspace not found"}`, 404)
@@ -67,7 +95,6 @@ func UpdateWorkspace(s store.Store) http.HandlerFunc {
 		}
 
 		if body.WebhookURLs != nil {
-			// Normalise: drop empty-string entries so they disappear from the map.
 			clean := make(map[string]string, len(body.WebhookURLs))
 			for k, v := range body.WebhookURLs {
 				if v != "" {

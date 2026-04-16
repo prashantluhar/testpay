@@ -18,7 +18,7 @@ func ListScenarios(s store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		zerolog.Ctx(ctx).Info().Str("handler", "ListScenarios").Msg("handler entry")
-		list, err := s.ListScenarios(ctx, store.LocalWorkspaceID)
+		list, err := s.ListScenarios(ctx, WorkspaceIDFromRequest(r, s))
 		if err != nil {
 			zerolog.Ctx(ctx).Error().Err(err).Str("handler", "ListScenarios").Msg("store error")
 			http.Error(w, `{"error":"failed to list scenarios"}`, 500)
@@ -41,7 +41,7 @@ func CreateScenario(s store.Store) http.HandlerFunc {
 			return
 		}
 		sc.ID = uuid.NewString()
-		sc.WorkspaceID = store.LocalWorkspaceID
+		sc.WorkspaceID = WorkspaceIDFromRequest(r, s)
 		if err := s.CreateScenario(ctx, &sc); err != nil {
 			zerolog.Ctx(ctx).Error().Err(err).Str("handler", "CreateScenario").Str("scenario_id", sc.ID).Msg("store error")
 			http.Error(w, `{"error":"failed to create scenario"}`, 500)

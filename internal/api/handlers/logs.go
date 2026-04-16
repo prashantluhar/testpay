@@ -22,7 +22,7 @@ func ListLogs(s store.Store) http.HandlerFunc {
 		}
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 		zerolog.Ctx(ctx).Info().Str("handler", "ListLogs").Int("limit", limit).Int("offset", offset).Msg("handler entry")
-		logs, err := s.ListRequestLogs(ctx, store.LocalWorkspaceID, limit, offset)
+		logs, err := s.ListRequestLogs(ctx, WorkspaceIDFromRequest(r, s), limit, offset)
 		if err != nil {
 			zerolog.Ctx(ctx).Error().Err(err).Str("handler", "ListLogs").Msg("store error")
 			http.Error(w, `{"error":"failed to list logs"}`, 500)

@@ -29,7 +29,7 @@ func CreateSession(s store.Store) http.HandlerFunc {
 		}
 		sess := &store.Session{
 			ID:          uuid.NewString(),
-			WorkspaceID: store.LocalWorkspaceID,
+			WorkspaceID: WorkspaceIDFromRequest(r, s),
 			ScenarioID:  req.ScenarioID,
 			TTLSeconds:  req.TTLSeconds,
 			ExpiresAt:   time.Now().Add(time.Duration(req.TTLSeconds) * time.Second),
