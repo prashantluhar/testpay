@@ -97,3 +97,32 @@ func TestLogger_emitsEdgeRequestLog(t *testing.T) {
 	}
 	assert.True(t, found, "expected edge 'request completed' log")
 }
+
+func TestAuth_localModePasses(t *testing.T) {
+	handler := middleware.Auth("local", "any_key")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	assert.Equal(t, 200, rec.Code)
+}
+
+func TestAuth_hostedModeRejectsNoKey(t *testing.T) {
+	handler := middleware.Auth("hosted", "secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	assert.Equal(t, 401, rec.Code)
+}
+
+func TestAuth_hostedModeAcceptsValidKey(t *testing.T) {
+	handler := middleware.Auth("hosted", "secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer secret")
+	handler.ServeHTTP(rec, req)
+	assert.Equal(t, 200, rec.Code)
+}
