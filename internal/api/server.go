@@ -42,6 +42,9 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 	mockHandler := handlers.NewMock(eng, reg, s, dispatcher)
 	r.Handle("/stripe/*", mockHandler)
 	r.Handle("/razorpay/*", mockHandler)
+	r.Handle("/adyen/*", mockHandler)
+	r.Handle("/omise/*", mockHandler)
+	r.Handle("/mastercard/*", mockHandler)
 	r.Handle("/v1/*", mockHandler)
 
 	// Control API — /api/auth/* stays open; everything else requires a session.
@@ -56,6 +59,7 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 		// auth is deliberately NOT accepted here; it's only for mock endpoints.
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAuth)
+			r.Get("/gateways", handlers.ListGateways(reg))
 			r.Get("/workspace", handlers.GetWorkspace(s))
 			r.Put("/workspace", handlers.UpdateWorkspace(s))
 			r.Route("/scenarios", func(r chi.Router) {

@@ -89,9 +89,13 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Msg("request body is not valid JSON — continuing with nil body")
 		}
 	}
+	merchantOrderID := extractMerchantOrderID(bodyMap)
+	operation := extractOperation(r.URL.Path)
 	log.Info().
 		Str("step", "body_parsed").
 		Int("body_bytes", len(rawBody)).
+		Str("operation", operation).
+		Str("merchant_order_id", merchantOrderID).
 		Interface("request_body", bodyMap).
 		Msg("request body parsed")
 
@@ -185,9 +189,14 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		)
 		if !result.SkipWebhook && h.dispatcher != nil {
 			// Priority: X-Webhook-URL header > workspace.webhook_urls[gateway]
+			//                                 > workspace.webhook_urls[_default]
 			targetURL = r.Header.Get("X-Webhook-URL")
 			if targetURL == "" && workspace != nil {
-				targetURL = workspace.WebhookURLs[adapter.Name()]
+				if u, ok := workspace.WebhookURLs[adapter.Name()]; ok && u != "" {
+					targetURL = u
+				} else if u, ok := workspace.WebhookURLs["_default"]; ok {
+					targetURL = u
+				}
 			}
 			willSendWebhook = targetURL != ""
 			if !willSendWebhook {
@@ -283,6 +292,50 @@ func headerToMap(h http.Header) map[string]string {
 		}
 	}
 	return m
+}
+
+// extractMerchantOrderID looks for the common places a caller might stash their
+// own order reference: top-level order_id / merchant_order_id, or nested under
+// metadata / notes (Stripe / Razorpay conventions).
+func extractMerchantOrderID(m map[string]any) string {
+	if m == nil {
+		return ""
+	}
+	for _, k := range []string{"order_id", "merchant_order_id", "merchantOrderId", "reference"} {
+		if v, ok := m[k].(string); ok && v != "" {
+			return v
+		}
+	}
+	for _, nestKey := range []string{"metadata", "notes"} {
+		if nest, ok := m[nestKey].(map[string]any); ok {
+			for _, k := range []string{"order_id", "merchant_order_id", "reference"} {
+				if v, ok := nest[k].(string); ok && v != "" {
+					return v
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// extractOperation derives a semantic operation name from the URL path:
+//   /stripe/v1/charges            -> charge
+//   /stripe/v1/refunds            -> refund
+//   /stripe/v1/charges/:id/capture -> capture
+func extractOperation(path string) string {
+	p := strings.ToLower(path)
+	switch {
+	case strings.Contains(p, "/refund"):
+		return "refund"
+	case strings.Contains(p, "/capture"):
+		return "capture"
+	case strings.Contains(p, "/authoriz"):
+		return "authorize"
+	case strings.Contains(p, "/charge"), strings.Contains(p, "/payment"):
+		return "charge"
+	default:
+		return "unknown"
+	}
 }
 
 // extractAmountCurrency pulls amount + currency from a parsed request body

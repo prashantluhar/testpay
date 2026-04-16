@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { useMe } from '@/lib/hooks';
+import { useMe, useGateways } from '@/lib/hooks';
 import { ApiKeyReveal } from '@/components/common/api-key-reveal';
 import { useTheme } from '@/components/common/theme-provider';
 import { CopyButton } from '@/components/common/copy-button';
@@ -13,31 +14,41 @@ import { MODE } from '@/lib/types';
 import { api, ApiError } from '@/lib/api';
 import { mutate } from 'swr';
 
-const GATEWAYS = ['stripe', 'razorpay', 'agnostic'] as const;
-type Gateway = (typeof GATEWAYS)[number];
+// Sentinel key in webhook_urls map that means "use this URL for any gateway
+// that has no explicit override". Server-side fallback logic reads this too.
+const DEFAULT_KEY = '_default';
 
 export default function SettingsPage() {
-  const { data } = useMe();
+  const { data: me } = useMe();
+  const { data: gateways = [] } = useGateways();
   const { theme, setTheme } = useTheme();
-  const [urls, setUrls] = useState<Record<Gateway, string>>({
-    stripe: '',
-    razorpay: '',
-    agnostic: '',
-  });
+
+  const [defaultUrl, setDefaultUrl] = useState('');
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [showOverrides, setShowOverrides] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Seed form from persisted workspace webhook_urls.
   useEffect(() => {
-    if (data?.workspace?.webhook_urls) {
-      setUrls({
-        stripe: data.workspace.webhook_urls.stripe ?? '',
-        razorpay: data.workspace.webhook_urls.razorpay ?? '',
-        agnostic: data.workspace.webhook_urls.agnostic ?? '',
-      });
+    const urls = me?.workspace?.webhook_urls ?? {};
+    setDefaultUrl(urls[DEFAULT_KEY] ?? '');
+    const ov: Record<string, string> = {};
+    for (const g of gateways) {
+      if (urls[g]) ov[g] = urls[g];
     }
-  }, [data?.workspace?.webhook_urls]);
+    setOverrides(ov);
+    // Auto-expand the overrides section if any are non-empty.
+    if (Object.keys(ov).length > 0) setShowOverrides(true);
+  }, [me?.workspace?.webhook_urls, gateways]);
 
-  if (!data) return null;
-  const { workspace, user } = data;
+  const configuredCount = useMemo(() => {
+    let n = defaultUrl ? 1 : 0;
+    n += Object.values(overrides).filter((v) => v && v !== defaultUrl).length;
+    return n;
+  }, [defaultUrl, overrides]);
+
+  if (!me) return null;
+  const { workspace, user } = me;
 
   const baseUrl =
     MODE === 'local' ? 'http://localhost:7700' : `https://api.testpay.dev/ws_${workspace.slug}`;
@@ -45,9 +56,14 @@ export default function SettingsPage() {
   async function saveWebhooks() {
     setSaving(true);
     try {
+      const payload: Record<string, string> = {};
+      if (defaultUrl) payload[DEFAULT_KEY] = defaultUrl;
+      for (const [g, v] of Object.entries(overrides)) {
+        if (v && v !== defaultUrl) payload[g] = v;
+      }
       await api('/api/workspace', {
         method: 'PUT',
-        body: JSON.stringify({ webhook_urls: urls }),
+        body: JSON.stringify({ webhook_urls: payload }),
       });
       toast.success('Webhook URLs saved');
       mutate('/api/auth/me');
@@ -59,7 +75,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <h1 className="text-2xl font-semibold">Settings</h1>
 
       <Card>
@@ -79,56 +95,105 @@ export default function SettingsPage() {
               <ApiKeyReveal value={workspace.api_key} />
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Send as <code className="font-mono">Authorization: Bearer …</code> on your mock
-              requests to attribute them to this workspace.
+              Send as <code className="font-mono">Authorization: Bearer …</code> on mock requests
+              to attribute them to this workspace.
             </p>
           </div>
         </CardContent>
       </Card>
 
+      {/* Webhook destinations — redesigned */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Webhook destinations</CardTitle>
+          <CardTitle className="text-base flex items-center justify-between">
+            <span>Webhook destinations</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {configuredCount === 0
+                ? 'none configured'
+                : `${configuredCount} configured`}
+            </span>
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-xs text-muted-foreground">
-            Each gateway gets its own webhook URL. The per-request{' '}
-            <code className="font-mono">X-Webhook-URL</code> header overrides this for one call.
-          </p>
-          {GATEWAYS.map((g) => (
-            <div key={g}>
-              <Label htmlFor={`webhook-${g}`} className="capitalize">
-                {g}
-              </Label>
-              <Input
-                id={`webhook-${g}`}
-                type="url"
-                placeholder={`https://your-app.example.com/webhooks/${g}`}
-                value={urls[g]}
-                onChange={(e) => setUrls((prev) => ({ ...prev, [g]: e.target.value }))}
-                className="font-mono mt-1"
-              />
-            </div>
-          ))}
-          <Button onClick={saveWebhooks} disabled={saving}>
-            {saving ? 'Saving…' : 'Save webhook URLs'}
-          </Button>
-          <div className="border-t pt-3 space-y-1">
-            <p className="text-xs font-semibold">Echoed fields in the webhook payload:</p>
-            <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
-              <li>
-                <b>Stripe:</b> <code className="font-mono">metadata</code> →{' '}
-                <code className="font-mono">data.object.metadata</code>
-              </li>
-              <li>
-                <b>Razorpay:</b> <code className="font-mono">notes</code> →{' '}
-                <code className="font-mono">payload.payment.entity.notes</code>
-              </li>
-              <li>
-                <b>Agnostic:</b> full request body →{' '}
-                <code className="font-mono">request_echo</code>
-              </li>
-            </ul>
+        <CardContent className="space-y-5">
+          {/* Default URL — applies to all gateways that don't have an override */}
+          <div>
+            <Label htmlFor="default-webhook" className="flex items-center gap-2">
+              Default URL
+              {defaultUrl && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
+            </Label>
+            <Input
+              id="default-webhook"
+              type="url"
+              placeholder="https://your-app.example.com/webhook"
+              value={defaultUrl}
+              onChange={(e) => setDefaultUrl(e.target.value)}
+              className="font-mono mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Used for every gateway unless you set a specific override below. Per-request
+              <code className="font-mono mx-1">X-Webhook-URL</code>header still overrides both.
+            </p>
+          </div>
+
+          {/* Per-gateway overrides — collapsible */}
+          <div className="border-t pt-4">
+            <button
+              type="button"
+              onClick={() => setShowOverrides((v) => !v)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showOverrides ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              Per-gateway overrides
+              <span className="text-xs text-muted-foreground">
+                ({Object.values(overrides).filter((v) => v && v !== defaultUrl).length} set
+                {gateways.length > 0 ? ` of ${gateways.length}` : ''})
+              </span>
+            </button>
+
+            {showOverrides && (
+              <div className="mt-3 space-y-2">
+                {gateways.length === 0 ? (
+                  <div className="text-xs text-muted-foreground flex items-center gap-2">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    Loading gateway list…
+                  </div>
+                ) : (
+                  gateways.map((g) => (
+                    <GatewayOverrideRow
+                      key={g}
+                      gateway={g}
+                      value={overrides[g] ?? ''}
+                      placeholder={defaultUrl || 'Uses default above'}
+                      onChange={(v) =>
+                        setOverrides((prev) => ({ ...prev, [g]: v }))
+                      }
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 pt-2 border-t">
+            <Button onClick={saveWebhooks} disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const urls = me.workspace.webhook_urls ?? {};
+                setDefaultUrl(urls[DEFAULT_KEY] ?? '');
+                const ov: Record<string, string> = {};
+                for (const g of gateways) if (urls[g]) ov[g] = urls[g];
+                setOverrides(ov);
+              }}
+            >
+              Reset
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -138,12 +203,12 @@ export default function SettingsPage() {
           <CardTitle className="text-base">Endpoints</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {GATEWAYS.map((g) => {
+          {gateways.map((g) => {
             const url = g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`;
             return (
               <div key={g} className="flex items-center gap-3">
-                <span className="w-20 text-sm uppercase text-muted-foreground">{g}</span>
-                <code className="flex-1 font-mono text-sm bg-muted px-3 py-2 rounded-md">
+                <span className="w-24 text-sm uppercase text-muted-foreground">{g}</span>
+                <code className="flex-1 font-mono text-sm bg-muted px-3 py-2 rounded-md truncate">
                   {url}
                 </code>
                 <CopyButton value={url} label="" />
@@ -183,6 +248,33 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function GatewayOverrideRow({
+  gateway,
+  value,
+  placeholder,
+  onChange,
+}: {
+  gateway: string;
+  value: string;
+  placeholder: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-24 text-xs uppercase tracking-wider text-muted-foreground shrink-0">
+        {gateway}
+      </span>
+      <Input
+        type="url"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="font-mono text-xs flex-1"
+      />
     </div>
   );
 }

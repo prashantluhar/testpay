@@ -58,3 +58,7 @@ export function useWebhooks(filters: { limit?: number; offset?: number; pollInte
 export function useWebhook(id: string | null) {
   return useSWR<WebhookLog>(id ? `/api/webhooks/${id}` : null, swrFetcher);
 }
+
+export function useGateways() {
+  return useSWR<string[]>('/api/gateways', swrFetcher, { revalidateOnFocus: false });
+}
