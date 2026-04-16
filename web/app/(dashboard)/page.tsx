@@ -1,8 +1,9 @@
 'use client';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/overview/stat-card';
 import { LiveFeed } from '@/components/overview/live-feed';
-import { useLogs, useScenarios, useWebhooks, useMe } from '@/lib/hooks';
+import { useLogs, useScenarios, useWebhooks, useMe, useGateways } from '@/lib/hooks';
 import { MODE } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/common/copy-button';
@@ -14,6 +15,8 @@ export default function OverviewPage() {
   const { data: scenarios } = useScenarios();
   const { data: webhooks } = useWebhooks({ limit: 500 });
   const { data: me } = useMe();
+  const { data: gateways = [] } = useGateways();
+  const [copiedGateway, setCopiedGateway] = useState<string | null>(null);
 
   const total = logs?.length ?? 0;
   const errors = logs?.filter((l) => l.response_status >= 400).length ?? 0;
@@ -26,6 +29,13 @@ export default function OverviewPage() {
       ? 'http://localhost:7700'
       : `https://api.testpay.dev/ws_${me?.workspace.slug}`;
 
+  function copyGatewayUrl(g: string) {
+    const url = g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`;
+    navigator.clipboard.writeText(url);
+    setCopiedGateway(g);
+    setTimeout(() => setCopiedGateway((c) => (c === g ? null : c)), 1500);
+  }
+
   return (
     <div className="space-y-6">
       {/* Hero: workspace endpoints */}
@@ -34,8 +44,8 @@ export default function OverviewPage() {
           <div>
             <h1 className="text-2xl font-semibold">Welcome back</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Point your app at one of these endpoints. Every request is logged; scenarios shape
-              the responses.
+              Point your app at the base URL, appended with any gateway below. Every request is
+              logged; scenarios shape the responses.
             </p>
           </div>
           <div className="flex gap-2">
@@ -50,22 +60,40 @@ export default function OverviewPage() {
             </Button>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5">
-          {(['stripe', 'razorpay', 'agnostic'] as const).map((g) => {
-            const url = g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`;
-            return (
-              <div
-                key={g}
-                className="flex items-center gap-2 bg-background/80 border rounded-md px-3 py-2"
-              >
-                <span className="text-xs uppercase tracking-wider text-muted-foreground w-16 shrink-0">
-                  {g}
-                </span>
-                <code className="flex-1 truncate font-mono text-xs">{url}</code>
-                <CopyButton value={url} label="" />
-              </div>
-            );
-          })}
+
+        {/* Base URL */}
+        <div className="mt-5 flex items-center gap-2 bg-background/80 border rounded-md px-3 py-2">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground shrink-0">
+            base
+          </span>
+          <code className="flex-1 truncate font-mono text-sm">{baseUrl}</code>
+          <CopyButton value={baseUrl} label="" />
+        </div>
+
+        {/* Gateway chips — click to copy full URL */}
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {gateways.length === 0 ? (
+            <span className="text-xs text-muted-foreground">Loading gateways…</span>
+          ) : (
+            gateways.map((g) => {
+              const active = copiedGateway === g;
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => copyGatewayUrl(g)}
+                  className={`px-2.5 py-1 rounded border text-xs font-mono transition-colors ${
+                    active
+                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-500'
+                      : 'bg-background/70 hover:bg-accent hover:border-border'
+                  }`}
+                  title={g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`}
+                >
+                  {active ? 'copied!' : g}
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
