@@ -126,3 +126,15 @@ func TestAuth_hostedModeAcceptsValidKey(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	assert.Equal(t, 200, rec.Code)
 }
+
+func TestResponseCapture_recordsStatus(t *testing.T) {
+	var captured middleware.CapturedResponse
+	handler := middleware.Capture(&captured)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(402)
+		w.Write([]byte(`{"error":"declined"}`))
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest("POST", "/stripe/v1/charges", nil))
+	assert.Equal(t, 402, captured.Status)
+	assert.Equal(t, `{"error":"declined"}`, string(captured.Body))
+}
