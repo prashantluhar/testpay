@@ -198,25 +198,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Endpoints</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {gateways.map((g) => {
-            const url = g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`;
-            return (
-              <div key={g} className="flex items-center gap-3">
-                <span className="w-24 text-sm uppercase text-muted-foreground">{g}</span>
-                <code className="flex-1 font-mono text-sm bg-muted px-3 py-2 rounded-md truncate">
-                  {url}
-                </code>
-                <CopyButton value={url} label="" />
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+      <EndpointsCard gateways={gateways} baseUrl={baseUrl} />
 
       <Card>
         <CardHeader>
@@ -249,6 +231,67 @@ export default function SettingsPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+function EndpointsCard({ gateways, baseUrl }: { gateways: string[]; baseUrl: string }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const selectedUrl =
+    selected === 'agnostic' ? `${baseUrl}/v1` : selected ? `${baseUrl}/${selected}` : '';
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center justify-between">
+          <span>Endpoints</span>
+          <span className="text-xs font-normal text-muted-foreground">
+            {gateways.length} gateways
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Point your app at <code className="font-mono">{baseUrl}/{'{gateway}'}</code>. Click a
+          chip below to copy its full URL.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {gateways.map((g) => {
+            const url = g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`;
+            const active = selected === g;
+            return (
+              <button
+                key={g}
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(url);
+                  setSelected(g);
+                  setTimeout(() => setSelected((cur) => (cur === g ? null : cur)), 1500);
+                }}
+                className={`px-3 py-1 rounded-md border text-xs font-mono transition-colors ${
+                  active
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-500'
+                    : 'bg-muted hover:bg-accent hover:border-border'
+                }`}
+                title={url}
+              >
+                {active ? 'copied' : g}
+              </button>
+            );
+          })}
+        </div>
+        {selected && (
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <span className="w-20 text-xs uppercase tracking-wider text-muted-foreground">
+              {selected}
+            </span>
+            <code className="flex-1 font-mono text-xs bg-muted px-3 py-2 rounded-md truncate">
+              {selectedUrl}
+            </code>
+            <CopyButton value={selectedUrl} label="" />
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
