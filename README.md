@@ -10,7 +10,16 @@
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://github.com/prashantluhar/testpay/pkgs/container/testpay)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-**Postman for Payments.** A mock payment gateway and failure simulation tool that lets developers test every real-world payment edge case — locally and in CI — without touching production systems.
+**Postman for Payments.** A mock payment gateway and failure-simulation tool that lets developers test every real-world payment edge case — locally and in CI — without touching production systems.
+
+---
+
+## What's in this repo
+
+- **Go backend** — mock gateway + simulation engine + Control API + webhook dispatcher. Single binary. See [internal/README.md](internal/README.md).
+- **Next.js dashboard** — 7-screen UI to create scenarios, inspect logs, replay requests. Embedded in the Go binary for local mode; deployable to Vercel for hosted mode. See [web/README.md](web/README.md).
+- **Deploy manifests** — Docker, docker-compose, Kubernetes, Vercel config — under `deploy/`.
+- **CI pipelines** — GitHub Actions for test, coverage gate, Docker image, release. Under `.github/workflows/`.
 
 ---
 
@@ -26,111 +35,130 @@ TestPay gives you a mock gateway that behaves exactly like Stripe, Razorpay, or 
 
 ## Features
 
-- **50+ failure modes** — bank declines, PG server errors, webhook anomalies, redirect/3DS flows, async state transitions
+- **28 failure modes** across bank, PG, webhook, redirect/3DS, charge anomalies, and async state transitions
 - **Named scenarios** — save sequences of failure modes as replayable test fixtures
-- **CI-ready** — trigger scenarios from GitHub Actions, pytest, Jest, or any test suite
 - **Full request logging** — every request, header, response, and webhook delivery logged to Postgres
 - **Webhook debugger** — inspect delivery attempts, retry history, and payloads
 - **Zero code change** — point your Stripe SDK at `localhost:7700/stripe` and it just works
-- **Gateway-agnostic engine** — Stripe and Razorpay adapters today; more coming
+- **Gateway-agnostic engine** — Stripe, Razorpay, and a generic "agnostic" adapter today; more coming
+- **Embedded dashboard** — `./testpay start` serves both the API (`:7700`) and the dashboard (`:7701`) from one binary
 
 ---
 
-## Quick Start (Local)
+## Quick Start — Local
 
-**Prerequisites:** Docker, Go 1.22+
+**Prerequisites:** Go 1.24+, Node 20+ (for building the dashboard), Postgres 16+ running somewhere
+
+### Option A — you already have Postgres running
 
 ```bash
-# 1. Clone
 git clone https://github.com/prashantluhar/testpay.git
 cd testpay
 
-# 2. Start Postgres
-docker compose up -d
+# 1. Build the dashboard static bundle (one-time)
+cd web
+pnpm install
+pnpm build                   # emits web/out/
+cd ..
 
-# 3. Run migrations + start the server
-export DATABASE_URL="postgres://testpay:testpay@localhost:5432/testpay?sslmode=disable"
-go run ./cmd/testpay start
+# 2. Create the database (skip if it already exists)
+createdb -h localhost -U postgres testpay
 
-# Mock server:  http://localhost:7700
-# Dashboard:    http://localhost:7701
+# 3. Start the server — migrations run automatically on boot
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/testpay?sslmode=disable"
+go run ./cmd/testpay start --config deploy/config/testpay.local.yaml
 ```
 
-**Point your app at the mock:**
+### Option B — fresh Postgres via docker-compose
+
 ```bash
-# Stripe users — one env var change, zero code changes
+git clone https://github.com/prashantluhar/testpay.git
+cd testpay
+
+cd web && pnpm install && pnpm build && cd ..
+docker compose -f deploy/docker/docker-compose.yml up -d postgres
+
+export DATABASE_URL="postgres://testpay:testpay@localhost:5432/testpay?sslmode=disable"
+go run ./cmd/testpay start --config deploy/config/testpay.local.yaml
+```
+
+Open:
+- **Dashboard:** http://localhost:7701
+- **Mock gateway API:** http://localhost:7700 (point your app here)
+- **Control API:** http://localhost:7700/api/* (scenarios, logs, auth)
+
+---
+
+## Point Your App at the Mock
+
+```bash
+# Stripe — one env var, no code changes
 STRIPE_BASE_URL=http://localhost:7700/stripe
 
-# Razorpay users
+# Razorpay
 RAZORPAY_BASE_URL=http://localhost:7700/razorpay
+
+# Any other gateway
+YOUR_GATEWAY_BASE_URL=http://localhost:7700/v1
 ```
+
+All requests are logged to Postgres and surfaced in the dashboard's **Logs** page.
 
 ---
 
-## Running Scenarios
+## Build a Single Binary (production)
 
 ```bash
-# List available scenarios
-testpay scenario list
+cd web && pnpm install && pnpm build && cd ..
+go build -o bin/testpay ./cmd/testpay
 
-# Run a built-in scenario
-testpay scenario run scn_retry_storm
-
-# Run in CI with assertion
-testpay scenario run scn_pending_then_failed --assert status=failed
-
-# Tail live logs
-testpay logs --follow
+# Run
+./bin/testpay start --config deploy/config/testpay.local.yaml
 ```
 
----
-
-## CI Integration (GitHub Actions)
-
-```yaml
-jobs:
-  payment-tests:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: testpay
-          POSTGRES_USER: testpay
-          POSTGRES_PASSWORD: testpay
-        ports: ["5432:5432"]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Start TestPay
-        run: |
-          export DATABASE_URL="postgres://testpay:testpay@localhost:5432/testpay?sslmode=disable"
-          go run ./cmd/testpay start &
-          sleep 2
-
-      - name: Run payment scenarios
-        run: |
-          testpay scenario run scn_retry_storm --assert webhook_received
-          testpay scenario run scn_webhook_missing --assert no_webhook
-          testpay scenario run scn_double_charge --assert idempotency_key_used
-```
+The Go binary embeds `web/out/` via `go:embed`, so the single file contains the full dashboard.
 
 ---
 
 ## Testing
 
 ```bash
-# All unit tests (no database required)
+# All Go unit tests (no database required)
 go test ./...
 
 # Integration tests (requires Postgres)
-export TEST_DATABASE_URL="postgres://testpay:testpay@localhost:5432/testpay_test?sslmode=disable"
+export TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5432/testpay?sslmode=disable"
 go test ./internal/store/postgres/... -v
 
-# With coverage
-go test ./... -coverprofile=coverage.out
-go tool cover -html=coverage.out
+# Coverage (target 90% in CI)
+make coverage-check
+
+# Frontend tests
+cd web && pnpm test
+```
+
+---
+
+## What to Test Manually
+
+With the server running (`http://localhost:7701`):
+
+1. **Auth flow (hosted mode only)** — `/signup` → creates workspace + user, logs you in. `/login` → validates credentials.
+2. **Overview page (`/`)** — stat cards populate after you hit the mock; live feed polls every 2s.
+3. **Scenarios (`/scenarios`)** — create a scenario with multiple failure-mode steps, save, run, delete.
+4. **Scenario Editor** — visual step builder with 28 outcomes grouped by category; JSON preview updates live.
+5. **Logs (`/logs`)** — send some requests to `/stripe/v1/charges`, see them appear; click a row for full request/response/webhook detail.
+6. **Log Detail drawer** — inspect headers, body, webhook payload across tabs; use the Replay button.
+7. **Settings (`/settings`)** — mask/reveal/copy API key, copy endpoint URLs, toggle theme.
+
+**Smoke test with curl:**
+```bash
+# Hit the mock
+curl -X POST http://localhost:7700/stripe/v1/charges \
+  -H "Content-Type: application/json" \
+  -d '{"amount":5000,"currency":"usd"}'
+
+# Watch the log flow into the dashboard at http://localhost:7701/logs
 ```
 
 ---
@@ -139,33 +167,64 @@ go tool cover -html=coverage.out
 
 ```
 testpay/
-├── cmd/testpay/         # CLI entrypoint
-├── internal/
-│   ├── engine/          # PG-agnostic simulation engine
-│   ├── adapters/        # Stripe, Razorpay, Agnostic adapters
-│   ├── store/           # Postgres data layer
-│   ├── webhook/         # Webhook dispatcher + retry
-│   └── api/             # HTTP server, middleware, handlers
-├── web/                 # Next.js dashboard (embedded in binary)
-└── docker-compose.yml
+├── cmd/testpay/          # CLI entrypoint
+├── cli/                  # Cobra commands (start, scenario, logs)
+├── internal/             # Go backend — see internal/README.md
+│   ├── engine/           # PG-agnostic simulation engine
+│   ├── adapters/         # Stripe, Razorpay, Agnostic adapters
+│   ├── store/            # Postgres data layer
+│   ├── webhook/          # Webhook dispatcher + retry
+│   ├── api/              # HTTP server, middleware, handlers
+│   └── observability/    # zerolog setup
+├── web/                  # Next.js dashboard — see web/README.md
+├── deploy/
+│   ├── config/           # Per-env YAML config files
+│   ├── docker/           # Dockerfile + compose
+│   └── k8s/              # Kubernetes manifests
+├── docs/superpowers/     # Design specs + implementation plans
+└── .github/workflows/    # CI + release
 ```
 
 The simulation engine is gateway-agnostic. Gateway-specific adapters translate requests/responses to the right wire format. Adding a new gateway is ~200 lines.
 
-All requests pass through a middleware chain that logs full headers, bodies, and response times to Postgres — giving you complete observability into every simulated transaction.
+All HTTP requests pass through a middleware chain that logs full headers, bodies, and response times to Postgres — giving you complete observability into every simulated transaction. See [internal/README.md](internal/README.md) for deep detail.
 
 ---
 
-## Failure Modes
+## Project Status
 
-| Category | Examples |
+| Component | Status |
 |---|---|
-| Bank failures | `bank_decline_hard`, `bank_decline_soft`, `bank_server_down`, `bank_timeout` |
-| PG failures | `pg_server_error`, `pg_timeout`, `pg_rate_limited`, `pg_maintenance` |
-| Webhook anomalies | `webhook_missing`, `webhook_delayed`, `webhook_duplicate`, `webhook_malformed` |
-| Redirect/3DS | `redirect_success`, `redirect_abandoned`, `redirect_timeout`, `redirect_failed` |
-| Charge anomalies | `double_charge`, `amount_mismatch`, `partial_success` |
-| Async transitions | `pending_then_failed`, `pending_then_success`, `failed_then_success` |
+| Backend core (engine, adapters, middleware, webhook, store) | ✅ Complete |
+| Control API (scenarios, sessions, logs, webhooks) | ✅ Complete |
+| Mock gateway endpoints (Stripe, Razorpay, Agnostic) | ✅ Complete |
+| Auth (signup/login/logout/me, JWT cookie) | ✅ Complete |
+| Observability (trace IDs, per-function logs, slow-query logging) | ✅ Complete |
+| YAML config + per-env files | ✅ Complete |
+| Dashboard (all 7 screens) | ✅ Complete |
+| Docker + Kubernetes + CI + release automation | ✅ Complete |
+| Embedded dashboard in Go binary | ✅ Complete |
+| CLI (start, scenario list/run, logs --follow) | ✅ Complete |
+
+---
+
+## Sub-project READMEs
+
+- [`internal/README.md`](internal/README.md) — backend architecture, package tour, auth, config, testing
+- [`web/README.md`](web/README.md) — frontend stack, screens, run modes, deployment
+
+---
+
+## Deployment
+
+**Dashboard:**
+- **Local:** embedded in the Go binary — run `./testpay start` and open http://localhost:7701
+- **Hosted:** deploy `web/` to Vercel (see `web/vercel.json` once added). Set `NEXT_PUBLIC_TESTPAY_MODE=hosted`.
+
+**Backend:**
+- **Docker:** `docker compose -f deploy/docker/docker-compose.yml up -d`
+- **Kubernetes:** `kubectl apply -f deploy/k8s/`
+- **Fly.io / Render / any PaaS:** `go build` the binary + Postgres
 
 ---
 
