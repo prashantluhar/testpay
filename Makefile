@@ -1,4 +1,4 @@
-.PHONY: build test test-integration run docker-up docker-down migrate lint
+.PHONY: build test test-integration run docker-up docker-down migrate lint coverage
 
 build:
 	go build -o bin/testpay ./cmd/testpay
@@ -12,13 +12,13 @@ test-integration:
 
 run:
 	DATABASE_URL="postgres://testpay:testpay@localhost:5432/testpay?sslmode=disable" \
-	go run ./cmd/testpay start
+	go run ./cmd/testpay start --config deploy/config/testpay.local.yaml
 
 docker-up:
-	docker compose up -d
+	docker compose -f deploy/docker/docker-compose.yml up -d
 
 docker-down:
-	docker compose down
+	docker compose -f deploy/docker/docker-compose.yml down
 
 lint:
 	go vet ./...

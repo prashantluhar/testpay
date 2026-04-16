@@ -7,10 +7,8 @@ services:
       POSTGRES_DB: testpay
       POSTGRES_USER: testpay
       POSTGRES_PASSWORD: testpay
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U testpay"]
       interval: 5s
@@ -18,15 +16,16 @@ services:
       retries: 5
 
   testpay:
-    build: .
-    ports:
-      - "7700:7700"
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    ports: ["7700:7700"]
     environment:
       DATABASE_URL: postgres://testpay:testpay@postgres:5432/testpay?sslmode=disable
-      TESTPAY_MODE: local
+    volumes:
+      - ../../deploy/config/testpay.local.yaml:/etc/testpay/testpay.yaml:ro
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres: { condition: service_healthy }
 
 volumes:
   pgdata:

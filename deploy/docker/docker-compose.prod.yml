@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: testpay
+      POSTGRES_USER: testpay
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+  testpay:
+    image: ghcr.io/prashantluhar/testpay:latest
+    restart: always
+    ports: ["7700:7700"]
+    environment:
+      DATABASE_URL: postgres://testpay:${POSTGRES_PASSWORD}@postgres:5432/testpay?sslmode=disable
+      API_KEY: ${API_KEY:?API_KEY required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      DATADOG_API_KEY: ${DATADOG_API_KEY:-}
+    volumes:
+      - ../config/testpay.prod.yaml:/etc/testpay/testpay.yaml:ro
+    depends_on: [postgres]
+
+volumes:
+  pgdata:

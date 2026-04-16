@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: testpay
+          POSTGRES_USER: testpay
+          POSTGRES_PASSWORD: testpay
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: Unit tests
+        run: go test ./... -count=1 -race
+      - name: Integration tests
+        env:
+          TEST_DATABASE_URL: postgres://testpay:testpay@localhost:5432/testpay?sslmode=disable
+        run: go test ./internal/store/postgres/... -v -count=1
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build -o bin/testpay ./cmd/testpay
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
