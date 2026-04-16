@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testpay
+  namespace: testpay
+  labels: { app: testpay }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: testpay }
+  template:
+    metadata:
+      labels: { app: testpay }
+    spec:
+      containers:
+        - name: testpay
+          image: ghcr.io/prashantluhar/testpay:latest
+          imagePullPolicy: Always
+          args: ["start", "--config", "/etc/testpay/testpay.yaml"]
+          ports:
+            - containerPort: 7700
+              name: http
+          envFrom:
+            - secretRef: { name: testpay-secrets }
+          volumeMounts:
+            - name: config
+              mountPath: /etc/testpay
+              readOnly: true
+          readinessProbe:
+            httpGet: { path: /api/workspace, port: 7700 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/workspace, port: 7700 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+      volumes:
+        - name: config
+          configMap:
+            name: testpay-config
