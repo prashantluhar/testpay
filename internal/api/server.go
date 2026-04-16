@@ -31,6 +31,7 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger(cfg.Environment, "testpay"))
 	r.Use(middleware.GatewayResolver)
+	r.Use(middleware.Session(cfg.Auth.JWTSecret, cfg.Server.Mode))
 	r.Use(middleware.Auth(cfg.Server.Mode, cfg.Auth.APIKey))
 
 	// Mock gateway endpoints (Stripe, Razorpay, Agnostic)
@@ -41,6 +42,10 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 
 	// Control API
 	r.Route("/api", func(r chi.Router) {
+		r.Post("/auth/signup", handlers.Signup(s, cfg.Auth.JWTSecret))
+		r.Post("/auth/login", handlers.Login(s, cfg.Auth.JWTSecret))
+		r.Post("/auth/logout", handlers.Logout())
+		r.Get("/auth/me", handlers.Me(s))
 		r.Get("/workspace", handlers.GetWorkspace(s))
 		r.Route("/scenarios", func(r chi.Router) {
 			r.Get("/", handlers.ListScenarios(s))
