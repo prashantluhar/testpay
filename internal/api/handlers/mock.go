@@ -151,17 +151,30 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		persistCtx := context.WithoutCancel(ctx)
 		chargeID := uuid.NewString()
 
+		// Capture the response body + headers for the persisted log so the
+		// dashboard Log Detail drawer can show what was actually returned.
+		var responseBodyMap map[string]any
+		if len(respBody) > 0 {
+			if uerr := json.Unmarshal(respBody, &responseBodyMap); uerr != nil {
+				// Non-JSON response (shouldn't happen for these adapters) —
+				// stash the raw text so it's still inspectable.
+				responseBodyMap = map[string]any{"_raw": string(respBody)}
+			}
+		}
+
 		reqLog := &store.RequestLog{
-			ID:             uuid.NewString(),
-			WorkspaceID:    workspaceID,
-			Gateway:        adapter.Name(),
-			Method:         r.Method,
-			Path:           r.URL.Path,
-			RequestHeaders: headerToMap(r.Header),
-			RequestBody:    bodyMap,
-			ResponseStatus: status,
-			DurationMs:     durationMs,
-			ClientIP:       r.RemoteAddr,
+			ID:              uuid.NewString(),
+			WorkspaceID:     workspaceID,
+			Gateway:         adapter.Name(),
+			Method:          r.Method,
+			Path:            r.URL.Path,
+			RequestHeaders:  headerToMap(r.Header),
+			RequestBody:     bodyMap,
+			ResponseHeaders: headers,
+			ResponseBody:    responseBodyMap,
+			ResponseStatus:  status,
+			DurationMs:      durationMs,
+			ClientIP:        r.RemoteAddr,
 		}
 
 		// Resolve webhook target before entering goroutine so log ordering
