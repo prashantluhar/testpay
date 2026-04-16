@@ -300,8 +300,9 @@ func ConnectPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 // ensure Store implements store.Store at compile time
 var _ store.Store = (*Store)(nil)
 
-// localWorkspaceID is used in local (single-tenant) mode.
-const LocalWorkspaceID = "00000000-0000-0000-0000-000000000001"
+// LocalWorkspaceID is retained for backward compatibility; the canonical
+// constant now lives in the store package.
+const LocalWorkspaceID = store.LocalWorkspaceID
 
 // SeedLocalWorkspace creates the default local workspace if it doesn't exist.
 func SeedLocalWorkspace(ctx context.Context, s *Store) error {
@@ -310,7 +311,7 @@ func SeedLocalWorkspace(ctx context.Context, s *Store) error {
 		return nil // already exists
 	}
 	return s.CreateWorkspace(ctx, &store.Workspace{
-		ID:     LocalWorkspaceID,
+		ID:     store.LocalWorkspaceID,
 		Slug:   "local",
 		APIKey: "local",
 	})

@@ -2,6 +2,9 @@ package store
 
 import "context"
 
+// LocalWorkspaceID is the fixed workspace ID used in local (single-tenant) mode.
+const LocalWorkspaceID = "00000000-0000-0000-0000-000000000001"
+
 type Store interface {
 	// Workspace
 	CreateWorkspace(ctx context.Context, w *Workspace) error
