@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"github.com/prashantluhar/testpay/internal/engine"
 	"github.com/prashantluhar/testpay/internal/store"
 	"github.com/prashantluhar/testpay/internal/webhook"
+	"github.com/rs/zerolog"
 )
 
 type MockHandler struct {
@@ -26,11 +28,13 @@ func NewMock(eng *engine.Engine, reg *adapters.Registry, s store.Store, d *webho
 
 func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	ctx := r.Context()
 	workspaceID := store.LocalWorkspaceID
 
 	// Resolve adapter
 	adapter, err := h.registry.Resolve(r.URL.Path)
 	if err != nil {
+		zerolog.Ctx(ctx).Error().Err(err).Str("path", r.URL.Path).Msg("unknown gateway")
 		http.Error(w, `{"error":"unknown gateway"}`, http.StatusNotFound)
 		return
 	}
@@ -44,12 +48,12 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var sc *store.Scenario
 	var stepIndex int
 	if h.store != nil {
-		sess, _ := h.store.GetActiveSession(r.Context(), workspaceID)
+		sess, _ := h.store.GetActiveSession(ctx, workspaceID)
 		if sess != nil {
-			sc, _ = h.store.GetScenario(r.Context(), sess.ScenarioID)
+			sc, _ = h.store.GetScenario(ctx, sess.ScenarioID)
 		}
 		if sc == nil {
-			sc, _ = h.store.GetDefaultScenario(r.Context(), workspaceID)
+			sc, _ = h.store.GetDefaultScenario(ctx, workspaceID)
 		}
 	}
 	if sc == nil {
@@ -69,6 +73,18 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	durationMs := int(time.Since(start).Milliseconds())
 
+	zerolog.Ctx(ctx).Info().
+		Str("gateway", adapter.Name()).
+		Str("scenario_id", sc.ID).
+		Str("scenario_name", sc.Name).
+		Int("step_index", stepIndex).
+		Str("outcome", string(result.Mode)).
+		Int("response_status", status).
+		Int("duration_ms", durationMs).
+		Bool("skip_webhook", result.SkipWebhook).
+		Bool("duplicate_webhook", result.DuplicateWebhook).
+		Msg("simulation step executed")
+
 	// Persist log + dispatch webhook async
 	if h.store != nil {
 		chargeID := uuid.NewString()
@@ -84,7 +100,11 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			DurationMs:     durationMs,
 			ClientIP:       r.RemoteAddr,
 		}
-		go h.store.CreateRequestLog(r.Context(), reqLog)
+		go func(ctx context.Context, l *store.RequestLog) {
+			if err := h.store.CreateRequestLog(ctx, l); err != nil {
+				zerolog.Ctx(ctx).Error().Err(err).Str("request_log_id", l.ID).Msg("failed to persist request log")
+			}
+		}(ctx, reqLog)
 
 		if !result.SkipWebhook && h.dispatcher != nil {
 			targetURL := r.Header.Get("X-Webhook-URL")
@@ -97,8 +117,12 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					TargetURL:      targetURL,
 					DeliveryStatus: "pending",
 				}
-				go h.store.CreateWebhookLog(r.Context(), wl)
-				webhook.DispatchAsync(r.Context(), h.dispatcher, h.store, wl, result.WebhookDelayMs)
+				go func(ctx context.Context, l *store.WebhookLog) {
+					if err := h.store.CreateWebhookLog(ctx, l); err != nil {
+						zerolog.Ctx(ctx).Error().Err(err).Str("webhook_log_id", l.ID).Msg("failed to persist webhook log")
+					}
+				}(ctx, wl)
+				webhook.DispatchAsync(ctx, h.dispatcher, h.store, wl, result.WebhookDelayMs)
 
 				if result.DuplicateWebhook {
 					wl2 := &store.WebhookLog{
@@ -108,8 +132,12 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						TargetURL:      targetURL,
 						DeliveryStatus: "duplicate",
 					}
-					go h.store.CreateWebhookLog(r.Context(), wl2)
-					webhook.DispatchAsync(r.Context(), h.dispatcher, h.store, wl2, result.WebhookDelayMs+500)
+					go func(ctx context.Context, l *store.WebhookLog) {
+						if err := h.store.CreateWebhookLog(ctx, l); err != nil {
+							zerolog.Ctx(ctx).Error().Err(err).Str("webhook_log_id", l.ID).Msg("failed to persist duplicate webhook log")
+						}
+					}(ctx, wl2)
+					webhook.DispatchAsync(ctx, h.dispatcher, h.store, wl2, result.WebhookDelayMs+500)
 				}
 			}
 		}

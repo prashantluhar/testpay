@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prashantluhar/testpay/internal/store"
+	"github.com/rs/zerolog"
 )
 
 type Store struct {
@@ -19,26 +20,56 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+const slowQueryThreshold = 100 * time.Millisecond
+
+// logSlow emits an error log if err != nil, or a warning if the query exceeded
+// the slow-query threshold. Called at the bottom of every store method.
+func logSlow(ctx context.Context, queryName string, start time.Time, err error) {
+	elapsed := time.Since(start)
+	if err != nil {
+		zerolog.Ctx(ctx).Error().
+			Err(err).
+			Str("query", queryName).
+			Int64("duration_ms", elapsed.Milliseconds()).
+			Msg("store query failed")
+		return
+	}
+	if elapsed > slowQueryThreshold {
+		zerolog.Ctx(ctx).Warn().
+			Str("query", queryName).
+			Int64("duration_ms", elapsed.Milliseconds()).
+			Msg("slow store query")
+	}
+}
+
 // ── Workspace ────────────────────────────────────────────────────────────────
 
 func (s *Store) CreateWorkspace(ctx context.Context, w *store.Workspace) error {
+	start := time.Now()
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO workspaces (id, slug, api_key) VALUES ($1, $2, $3)`,
 		w.ID, w.Slug, w.APIKey,
 	)
+	logSlow(ctx, "CreateWorkspace", start, err)
 	return err
 }
 
 func (s *Store) GetWorkspaceByAPIKey(ctx context.Context, apiKey string) (*store.Workspace, error) {
+	start := time.Now()
 	row := s.pool.QueryRow(ctx,
 		`SELECT id, slug, api_key, created_at FROM workspaces WHERE api_key = $1`, apiKey)
-	return scanWorkspace(row)
+	ws, err := scanWorkspace(row)
+	logSlow(ctx, "GetWorkspaceByAPIKey", start, err)
+	return ws, err
 }
 
 func (s *Store) GetWorkspaceBySlug(ctx context.Context, slug string) (*store.Workspace, error) {
+	start := time.Now()
 	row := s.pool.QueryRow(ctx,
 		`SELECT id, slug, api_key, created_at FROM workspaces WHERE slug = $1`, slug)
-	return scanWorkspace(row)
+	ws, err := scanWorkspace(row)
+	logSlow(ctx, "GetWorkspaceBySlug", start, err)
+	return ws, err
 }
 
 func scanWorkspace(row pgx.Row) (*store.Workspace, error) {
@@ -52,8 +83,10 @@ func scanWorkspace(row pgx.Row) (*store.Workspace, error) {
 // ── Scenarios ────────────────────────────────────────────────────────────────
 
 func (s *Store) CreateScenario(ctx context.Context, sc *store.Scenario) error {
+	start := time.Now()
 	stepsJSON, err := json.Marshal(sc.Steps)
 	if err != nil {
+		logSlow(ctx, "CreateScenario", start, err)
 		return err
 	}
 	_, err = s.pool.Exec(ctx,
@@ -62,39 +95,50 @@ func (s *Store) CreateScenario(ctx context.Context, sc *store.Scenario) error {
 		sc.ID, sc.WorkspaceID, sc.Name, sc.Description, sc.Gateway,
 		stepsJSON, sc.WebhookDelayMs, sc.IsDefault,
 	)
+	logSlow(ctx, "CreateScenario", start, err)
 	return err
 }
 
 func (s *Store) ListScenarios(ctx context.Context, workspaceID string) ([]*store.Scenario, error) {
+	start := time.Now()
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, workspace_id, name, description, gateway, steps, webhook_delay_ms, is_default, created_at
 		 FROM scenarios WHERE workspace_id = $1 ORDER BY created_at DESC`, workspaceID)
 	if err != nil {
+		logSlow(ctx, "ListScenarios", start, err)
 		return nil, err
 	}
 	defer rows.Close()
 
 	var out []*store.Scenario
 	for rows.Next() {
-		sc, err := scanScenario(rows)
-		if err != nil {
-			return nil, err
+		sc, scanErr := scanScenario(rows)
+		if scanErr != nil {
+			logSlow(ctx, "ListScenarios", start, scanErr)
+			return nil, scanErr
 		}
 		out = append(out, sc)
 	}
-	return out, rows.Err()
+	err = rows.Err()
+	logSlow(ctx, "ListScenarios", start, err)
+	return out, err
 }
 
 func (s *Store) GetScenario(ctx context.Context, id string) (*store.Scenario, error) {
+	start := time.Now()
 	row := s.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, name, description, gateway, steps, webhook_delay_ms, is_default, created_at
 		 FROM scenarios WHERE id = $1`, id)
-	return scanScenario(row)
+	sc, err := scanScenario(row)
+	logSlow(ctx, "GetScenario", start, err)
+	return sc, err
 }
 
 func (s *Store) UpdateScenario(ctx context.Context, sc *store.Scenario) error {
+	start := time.Now()
 	stepsJSON, err := json.Marshal(sc.Steps)
 	if err != nil {
+		logSlow(ctx, "UpdateScenario", start, err)
 		return err
 	}
 	_, err = s.pool.Exec(ctx,
@@ -102,19 +146,25 @@ func (s *Store) UpdateScenario(ctx context.Context, sc *store.Scenario) error {
 		 WHERE id=$7`,
 		sc.Name, sc.Description, sc.Gateway, stepsJSON, sc.WebhookDelayMs, sc.IsDefault, sc.ID,
 	)
+	logSlow(ctx, "UpdateScenario", start, err)
 	return err
 }
 
 func (s *Store) DeleteScenario(ctx context.Context, id string) error {
+	start := time.Now()
 	_, err := s.pool.Exec(ctx, `DELETE FROM scenarios WHERE id = $1`, id)
+	logSlow(ctx, "DeleteScenario", start, err)
 	return err
 }
 
 func (s *Store) GetDefaultScenario(ctx context.Context, workspaceID string) (*store.Scenario, error) {
+	start := time.Now()
 	row := s.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, name, description, gateway, steps, webhook_delay_ms, is_default, created_at
 		 FROM scenarios WHERE workspace_id = $1 AND is_default = TRUE LIMIT 1`, workspaceID)
-	return scanScenario(row)
+	sc, err := scanScenario(row)
+	logSlow(ctx, "GetDefaultScenario", start, err)
+	return sc, err
 }
 
 func scanScenario(row interface {
@@ -135,33 +185,40 @@ func scanScenario(row interface {
 // ── ScenarioRuns ─────────────────────────────────────────────────────────────
 
 func (s *Store) CreateScenarioRun(ctx context.Context, r *store.ScenarioRun) error {
+	start := time.Now()
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO scenario_runs (id, scenario_id, status) VALUES ($1, $2, $3)`,
 		r.ID, r.ScenarioID, r.Status,
 	)
+	logSlow(ctx, "CreateScenarioRun", start, err)
 	return err
 }
 
 func (s *Store) UpdateScenarioRun(ctx context.Context, r *store.ScenarioRun) error {
+	start := time.Now()
 	_, err := s.pool.Exec(ctx,
 		`UPDATE scenario_runs SET status=$1, completed_at=$2 WHERE id=$3`,
 		r.Status, r.CompletedAt, r.ID,
 	)
+	logSlow(ctx, "UpdateScenarioRun", start, err)
 	return err
 }
 
 // ── Sessions ─────────────────────────────────────────────────────────────────
 
 func (s *Store) CreateSession(ctx context.Context, sess *store.Session) error {
+	start := time.Now()
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO sessions (id, workspace_id, scenario_id, ttl_seconds, expires_at)
 		 VALUES ($1, $2, $3, $4, $5)`,
 		sess.ID, sess.WorkspaceID, sess.ScenarioID, sess.TTLSeconds, sess.ExpiresAt,
 	)
+	logSlow(ctx, "CreateSession", start, err)
 	return err
 }
 
 func (s *Store) GetActiveSession(ctx context.Context, workspaceID string) (*store.Session, error) {
+	start := time.Now()
 	var sess store.Session
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, scenario_id, ttl_seconds, expires_at, created_at
@@ -169,19 +226,24 @@ func (s *Store) GetActiveSession(ctx context.Context, workspaceID string) (*stor
 		workspaceID,
 	).Scan(&sess.ID, &sess.WorkspaceID, &sess.ScenarioID, &sess.TTLSeconds, &sess.ExpiresAt, &sess.CreatedAt)
 	if err != nil {
+		logSlow(ctx, "GetActiveSession", start, err)
 		return nil, fmt.Errorf("no active session: %w", err)
 	}
+	logSlow(ctx, "GetActiveSession", start, nil)
 	return &sess, nil
 }
 
 func (s *Store) DeleteSession(ctx context.Context, id string) error {
+	start := time.Now()
 	_, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE id = $1`, id)
+	logSlow(ctx, "DeleteSession", start, err)
 	return err
 }
 
 // ── RequestLogs ──────────────────────────────────────────────────────────────
 
 func (s *Store) CreateRequestLog(ctx context.Context, l *store.RequestLog) error {
+	start := time.Now()
 	reqHeaders, _ := json.Marshal(l.RequestHeaders)
 	reqBody, _ := json.Marshal(l.RequestBody)
 	respHeaders, _ := json.Marshal(l.ResponseHeaders)
@@ -197,10 +259,12 @@ func (s *Store) CreateRequestLog(ctx context.Context, l *store.RequestLog) error
 		reqHeaders, reqBody, respHeaders, respBody,
 		l.ResponseStatus, l.DurationMs, l.ClientIP,
 	)
+	logSlow(ctx, "CreateRequestLog", start, err)
 	return err
 }
 
 func (s *Store) ListRequestLogs(ctx context.Context, workspaceID string, limit, offset int) ([]*store.RequestLog, error) {
+	start := time.Now()
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, workspace_id, scenario_run_id, gateway, method, path,
 		        request_headers, request_body, response_headers, response_body,
@@ -209,28 +273,35 @@ func (s *Store) ListRequestLogs(ctx context.Context, workspaceID string, limit, 
 		workspaceID, limit, offset,
 	)
 	if err != nil {
+		logSlow(ctx, "ListRequestLogs", start, err)
 		return nil, err
 	}
 	defer rows.Close()
 
 	var out []*store.RequestLog
 	for rows.Next() {
-		l, err := scanRequestLog(rows)
-		if err != nil {
-			return nil, err
+		l, scanErr := scanRequestLog(rows)
+		if scanErr != nil {
+			logSlow(ctx, "ListRequestLogs", start, scanErr)
+			return nil, scanErr
 		}
 		out = append(out, l)
 	}
-	return out, rows.Err()
+	err = rows.Err()
+	logSlow(ctx, "ListRequestLogs", start, err)
+	return out, err
 }
 
 func (s *Store) GetRequestLog(ctx context.Context, id string) (*store.RequestLog, error) {
+	start := time.Now()
 	row := s.pool.QueryRow(ctx,
 		`SELECT id, workspace_id, scenario_run_id, gateway, method, path,
 		        request_headers, request_body, response_headers, response_body,
 		        response_status, duration_ms, client_ip, created_at
 		 FROM request_logs WHERE id = $1`, id)
-	return scanRequestLog(row)
+	l, err := scanRequestLog(row)
+	logSlow(ctx, "GetRequestLog", start, err)
+	return l, err
 }
 
 func scanRequestLog(row interface{ Scan(...any) error }) (*store.RequestLog, error) {
@@ -250,6 +321,7 @@ func scanRequestLog(row interface{ Scan(...any) error }) (*store.RequestLog, err
 // ── WebhookLogs ──────────────────────────────────────────────────────────────
 
 func (s *Store) CreateWebhookLog(ctx context.Context, l *store.WebhookLog) error {
+	start := time.Now()
 	payload, _ := json.Marshal(l.Payload)
 	attemptLogs, _ := json.Marshal(l.AttemptLogs)
 	_, err := s.pool.Exec(ctx,
@@ -257,19 +329,23 @@ func (s *Store) CreateWebhookLog(ctx context.Context, l *store.WebhookLog) error
 		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
 		l.ID, l.RequestLogID, payload, l.TargetURL, l.DeliveryStatus, l.Attempts, attemptLogs,
 	)
+	logSlow(ctx, "CreateWebhookLog", start, err)
 	return err
 }
 
 func (s *Store) UpdateWebhookLog(ctx context.Context, l *store.WebhookLog) error {
+	start := time.Now()
 	attemptLogs, _ := json.Marshal(l.AttemptLogs)
 	_, err := s.pool.Exec(ctx,
 		`UPDATE webhook_logs SET delivery_status=$1, attempts=$2, attempt_logs=$3, delivered_at=$4 WHERE id=$5`,
 		l.DeliveryStatus, l.Attempts, attemptLogs, l.DeliveredAt, l.ID,
 	)
+	logSlow(ctx, "UpdateWebhookLog", start, err)
 	return err
 }
 
 func (s *Store) GetWebhookLogByRequestID(ctx context.Context, requestLogID string) (*store.WebhookLog, error) {
+	start := time.Now()
 	var l store.WebhookLog
 	var payload, attemptLogs []byte
 	err := s.pool.QueryRow(ctx,
@@ -278,10 +354,12 @@ func (s *Store) GetWebhookLogByRequestID(ctx context.Context, requestLogID strin
 	).Scan(&l.ID, &l.RequestLogID, &payload, &l.TargetURL, &l.DeliveryStatus,
 		&l.Attempts, &attemptLogs, &l.DeliveredAt, &l.CreatedAt)
 	if err != nil {
+		logSlow(ctx, "GetWebhookLogByRequestID", start, err)
 		return nil, err
 	}
 	json.Unmarshal(payload, &l.Payload)
 	json.Unmarshal(attemptLogs, &l.AttemptLogs)
+	logSlow(ctx, "GetWebhookLogByRequestID", start, nil)
 	return &l, nil
 }
 

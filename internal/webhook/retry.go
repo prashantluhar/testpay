@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/prashantluhar/testpay/internal/store"
+	"github.com/rs/zerolog"
 )
 
 // DispatchAsync fires a webhook in a goroutine and updates the WebhookLog.
@@ -17,6 +18,14 @@ func DispatchAsync(
 	delayMs int,
 ) {
 	go func() {
+		logger := zerolog.Ctx(ctx)
+
+		logger.Info().
+			Str("webhook_log_id", webhookLog.ID).
+			Str("target_url", webhookLog.TargetURL).
+			Int("delay_ms", delayMs).
+			Msg("webhook dispatch scheduled")
+
 		if delayMs > 0 {
 			time.Sleep(time.Duration(delayMs) * time.Millisecond)
 		}
@@ -30,16 +39,39 @@ func DispatchAsync(
 				DurationMs:  a.DurationMs,
 				AttemptedAt: a.AttemptedAt.Format(time.RFC3339),
 			})
+			logger.Info().
+				Str("webhook_log_id", webhookLog.ID).
+				Str("target_url", webhookLog.TargetURL).
+				Int("attempt_status", a.Status).
+				Int("attempt_duration_ms", a.DurationMs).
+				Msg("webhook attempt")
 		}
 
 		if err == nil {
 			now := time.Now()
 			webhookLog.DeliveryStatus = "delivered"
 			webhookLog.DeliveredAt = &now
+			logger.Info().
+				Str("webhook_log_id", webhookLog.ID).
+				Str("target_url", webhookLog.TargetURL).
+				Int("attempts", result.Attempts).
+				Int("status_code", result.StatusCode).
+				Msg("webhook delivered")
 		} else {
 			webhookLog.DeliveryStatus = "failed"
+			logger.Error().
+				Err(err).
+				Str("webhook_log_id", webhookLog.ID).
+				Str("target_url", webhookLog.TargetURL).
+				Int("attempts", result.Attempts).
+				Msg("webhook failed")
 		}
 
-		s.UpdateWebhookLog(ctx, webhookLog)
+		if updErr := s.UpdateWebhookLog(ctx, webhookLog); updErr != nil {
+			logger.Error().
+				Err(updErr).
+				Str("webhook_log_id", webhookLog.ID).
+				Msg("failed to update webhook log")
+		}
 	}()
 }
