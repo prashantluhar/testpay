@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,6 +17,7 @@ import (
 	"github.com/prashantluhar/testpay/internal/config"
 	"github.com/prashantluhar/testpay/internal/observability"
 	pgstore "github.com/prashantluhar/testpay/internal/store/postgres"
+	"github.com/prashantluhar/testpay/web"
 )
 
 var configPath string
@@ -50,11 +53,27 @@ var startCmd = &cobra.Command{
 
 		srv := api.NewServer(cfg, s)
 
-		log.Info().Msgf("TestPay running on %s:%d (mode=%s)", cfg.Server.Host, cfg.Server.Port, cfg.Server.Mode)
+		log.Info().Msgf("TestPay API running on %s:%d (mode=%s)", cfg.Server.Host, cfg.Server.Port, cfg.Server.Mode)
 
 		go func() {
-			if err := srv.ListenAndServe(); err != nil {
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Error().Err(err).Msg("server error")
+			}
+		}()
+
+		// Dashboard server on :7701 (embedded Next.js static export)
+		dashFS, err := fs.Sub(web.Assets, "out")
+		if err != nil {
+			return fmt.Errorf("loading embedded dashboard: %w", err)
+		}
+		dash := &http.Server{
+			Addr:    ":7701",
+			Handler: http.FileServer(http.FS(dashFS)),
+		}
+		go func() {
+			log.Info().Msg("TestPay dashboard running at http://localhost:7701")
+			if err := dash.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Error().Err(err).Msg("dashboard server error")
 			}
 		}()
 
@@ -67,6 +86,7 @@ var startCmd = &cobra.Command{
 			time.Duration(cfg.Server.ShutdownTimeoutSeconds)*time.Second,
 		)
 		defer cancel()
+		_ = dash.Shutdown(shutdownCtx)
 		return srv.Shutdown(shutdownCtx)
 	},
 }
