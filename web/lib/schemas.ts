@@ -21,10 +21,10 @@ export const scenarioStepSchema = z.object({
 
 export const scenarioSchema = z.object({
   Name: z.string().min(1),
-  Description: z.string().default(''),
+  Description: z.string(),
   Gateway: z.enum(['stripe', 'razorpay', 'agnostic']),
   Steps: z.array(scenarioStepSchema).min(1),
-  WebhookDelayMs: z.number().int().min(0).default(0),
-  IsDefault: z.boolean().default(false),
+  WebhookDelayMs: z.number().int().min(0),
+  IsDefault: z.boolean(),
 });
 export type ScenarioInput = z.infer<typeof scenarioSchema>;
