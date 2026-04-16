@@ -1,4 +1,4 @@
-.PHONY: build test test-integration run docker-up docker-down migrate lint coverage
+.PHONY: build test test-integration run docker-up docker-down migrate lint coverage coverage-check
 
 build:
 	go build -o bin/testpay ./cmd/testpay
@@ -26,3 +26,13 @@ lint:
 coverage:
 	go test ./... -coverprofile=coverage.out
 	go tool cover -html=coverage.out
+
+COVERAGE_THRESHOLD ?= 90
+
+coverage-check:
+	go test ./... -coverprofile=coverage.out -covermode=atomic
+	@COVERAGE=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
+	echo "Total coverage: $$COVERAGE%"; \
+	awk -v cov="$$COVERAGE" -v thr="$(COVERAGE_THRESHOLD)" 'BEGIN { if (cov+0 < thr+0) { exit 1 } }' || \
+	(echo "Coverage $$COVERAGE% is below threshold $(COVERAGE_THRESHOLD)%"; exit 1)
+	@echo "Coverage gate passed"

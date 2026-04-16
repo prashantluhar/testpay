@@ -1,0 +1,17 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 90%
+        threshold: 1%       # tolerate 1% drop before failing
+    patch:
+      default:
+        target: 90%
+ignore:
+  - "cmd/**"
+  - "**/*_test.go"
+  - "internal/store/postgres/migrations/**"
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
