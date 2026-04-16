@@ -8,12 +8,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/prashantluhar/testpay/internal/api"
 	"github.com/prashantluhar/testpay/internal/config"
+	"github.com/prashantluhar/testpay/internal/observability"
 	pgstore "github.com/prashantluhar/testpay/internal/store/postgres"
 )
 
@@ -23,12 +23,11 @@ var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the TestPay mock server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-
 		cfg, err := config.LoadFromFile(configPath)
 		if err != nil {
 			return fmt.Errorf("loading config: %w", err)
 		}
+		observability.Setup(cfg.Logging.Level, cfg.Logging.Format, cfg.Environment, "testpay")
 		log.Info().Str("environment", cfg.Environment).Msg("config loaded")
 
 		ctx := context.Background()
