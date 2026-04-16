@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,7 +30,26 @@ func NewMock(eng *engine.Engine, reg *adapters.Registry, s store.Store, d *webho
 func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ctx := r.Context()
+
+	// Resolve the calling workspace. Priority:
+	// 1. Authorization: Bearer <api_key>  → lookup workspace by api_key
+	// 2. Fallback to LocalWorkspaceID (local mode)
 	workspaceID := store.LocalWorkspaceID
+	var workspace *store.Workspace
+	if h.store != nil {
+		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+			apiKey := strings.TrimPrefix(auth, "Bearer ")
+			if ws, werr := h.store.GetWorkspaceByAPIKey(ctx, apiKey); werr == nil && ws != nil {
+				workspace = ws
+				workspaceID = ws.ID
+			}
+		}
+		if workspace == nil {
+			if ws, werr := h.store.GetWorkspaceByID(ctx, workspaceID); werr == nil {
+				workspace = ws
+			}
+		}
+	}
 
 	// Resolve adapter
 	adapter, err := h.registry.Resolve(r.URL.Path)
@@ -111,7 +131,11 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}(persistCtx, reqLog)
 
 		if !result.SkipWebhook && h.dispatcher != nil {
+			// Webhook target priority: X-Webhook-URL header > workspace.webhook_url
 			targetURL := r.Header.Get("X-Webhook-URL")
+			if targetURL == "" && workspace != nil {
+				targetURL = workspace.WebhookURL
+			}
 			if targetURL != "" {
 				payload := adapter.BuildWebhookPayload(result, chargeID, 5000, "usd")
 				wl := &store.WebhookLog{

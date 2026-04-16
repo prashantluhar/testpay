@@ -14,6 +14,7 @@ type Store interface {
 	GetWorkspaceByAPIKey(ctx context.Context, apiKey string) (*Workspace, error)
 	GetWorkspaceBySlug(ctx context.Context, slug string) (*Workspace, error)
 	GetWorkspaceByID(ctx context.Context, id string) (*Workspace, error)
+	UpdateWorkspace(ctx context.Context, w *Workspace) error
 
 	// Scenarios
 	ListScenarios(ctx context.Context, workspaceID string) ([]*Scenario, error)

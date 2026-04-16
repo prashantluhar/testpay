@@ -1,8 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ListTodo, ScrollText, Settings, Zap, LogOut } from 'lucide-react';
-import { MODE } from '@/lib/types';
+import { LayoutDashboard, ListTodo, ScrollText, Settings, Zap, LogOut, LogIn } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { User, Workspace } from '@/lib/types';
 
@@ -57,19 +56,30 @@ export function Sidebar({ user, workspace }: { user: User | null; workspace: Wor
         })}
       </nav>
       <div className="p-4 border-t text-xs">
-        {MODE === 'hosted' && user ? (
+        {user ? (
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground truncate">{user.email}</span>
             <button
               onClick={signOut}
               className="text-muted-foreground hover:text-foreground"
               aria-label="Sign out"
+              title="Sign out"
             >
               <LogOut className="h-4 w-4" />
             </button>
           </div>
         ) : (
-          <span className="text-muted-foreground">local mode</span>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">anonymous</span>
+            <Link
+              href="/login"
+              className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+              title="Sign in"
+            >
+              <LogIn className="h-4 w-4" />
+              <span>Sign in</span>
+            </Link>
+          </div>
         )}
       </div>
     </aside>

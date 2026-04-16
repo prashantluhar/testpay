@@ -51,6 +51,7 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 		r.Post("/auth/logout", handlers.Logout())
 		r.Get("/auth/me", handlers.Me(s))
 		r.Get("/workspace", handlers.GetWorkspace(s))
+		r.Put("/workspace", handlers.UpdateWorkspace(s))
 		r.Route("/scenarios", func(r chi.Router) {
 			r.Get("/", handlers.ListScenarios(s))
 			r.Post("/", handlers.CreateScenario(s))
