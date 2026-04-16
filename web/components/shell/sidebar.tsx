@@ -1,8 +1,7 @@
 'use client';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ListTodo, ScrollText, Settings, Zap, LogOut, Send } from 'lucide-react';
-import { api } from '@/lib/api';
+import { usePathname } from 'next/navigation';
+import { LayoutDashboard, ListTodo, ScrollText, Settings, Zap, Send } from 'lucide-react';
 import type { User, Workspace } from '@/lib/types';
 
 const items = [
@@ -13,21 +12,12 @@ const items = [
   { href: '/settings', label: 'Settings', icon: Settings, hint: 'Keys, endpoints, theme' },
 ];
 
-export function Sidebar({ user, workspace }: { user: User; workspace: Workspace }) {
+// User menu lives in the topbar (standard SaaS pattern); sidebar is purely nav.
+export function Sidebar({ workspace }: { user: User; workspace: Workspace }) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function signOut() {
-    try {
-      await api('/api/auth/logout', { method: 'POST' });
-    } catch {
-      /* ignore */
-    }
-    router.push('/login');
-  }
 
   return (
-    <aside className="w-60 shrink-0 border-r flex flex-col bg-card">
+    <aside className="w-60 shrink-0 border-r flex flex-col bg-card h-screen sticky top-0">
       <div className="p-4 border-b flex items-center gap-2 font-semibold">
         <Zap className="h-5 w-5 text-emerald-500" />
         <span>TestPay</span>
@@ -36,7 +26,7 @@ export function Sidebar({ user, workspace }: { user: User; workspace: Workspace 
         <div className="uppercase tracking-wider mb-1">Workspace</div>
         <div className="font-mono text-foreground truncate">{workspace.slug}</div>
       </div>
-      <nav className="flex-1 p-2 space-y-0.5">
+      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {items.map((it) => {
           const active = pathname === it.href || (it.href !== '/' && pathname.startsWith(it.href));
           const Icon = it.icon;
@@ -57,18 +47,8 @@ export function Sidebar({ user, workspace }: { user: User; workspace: Workspace 
           );
         })}
       </nav>
-      <div className="p-4 border-t text-xs space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground truncate">{user.email}</span>
-          <button
-            onClick={signOut}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+      <div className="p-3 border-t text-[10px] text-muted-foreground/70 uppercase tracking-wider">
+        TestPay
       </div>
     </aside>
   );

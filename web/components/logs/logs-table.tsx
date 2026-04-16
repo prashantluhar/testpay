@@ -19,9 +19,9 @@ export function LogsTable({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="border rounded-md">
+    <div>
       <Table>
-        <TableHeader>
+        <TableHeader className="sticky top-0 bg-card z-10">
           <TableRow>
             <TableHead className="w-40">Time</TableHead>
             <TableHead className="w-16">Status</TableHead>

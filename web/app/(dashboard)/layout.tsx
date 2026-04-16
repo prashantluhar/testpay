@@ -37,12 +37,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="h-screen flex bg-background overflow-hidden">
       <Sidebar user={data.user} workspace={data.workspace} />
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar workspace={data.workspace} />
-        <main className="flex-1 overflow-auto">
-          <div className="max-w-6xl mx-auto px-6 py-8 w-full">{children}</div>
+        <Topbar user={data.user} workspace={data.workspace} />
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto px-6 py-6 w-full">{children}</div>
         </main>
       </div>
     </div>

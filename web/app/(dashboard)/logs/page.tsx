@@ -31,10 +31,17 @@ export default function LogsPage() {
   }, [data, filters]);
 
   return (
-    <div className="space-y-3">
-      <h1 className="text-2xl font-semibold">Logs</h1>
-      <LogFilters value={filters} onChange={setFilters} />
-      <LogsTable rows={rows} onSelect={setSelected} />
+    <div className="flex flex-col h-[calc(100vh-8rem)]">
+      <div className="flex items-end justify-between mb-3 shrink-0">
+        <h1 className="text-2xl font-semibold">Logs</h1>
+        <span className="text-xs text-muted-foreground">{rows.length} shown</span>
+      </div>
+      <div className="shrink-0">
+        <LogFilters value={filters} onChange={setFilters} />
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto border rounded-md">
+        <LogsTable rows={rows} onSelect={setSelected} />
+      </div>
       <LogDetailDrawer id={selected} onClose={() => setSelected(null)} />
     </div>
   );

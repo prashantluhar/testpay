@@ -35,16 +35,19 @@ export default function WebhooksPage() {
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-2xl font-semibold">Webhooks</h1>
-        <p className="text-sm text-muted-foreground">
-          Outbound webhook deliveries. Polls every 3s.
-        </p>
+    <div className="flex flex-col h-[calc(100vh-6rem)]">
+      <div className="flex items-end justify-between mb-3 shrink-0">
+        <div>
+          <h1 className="text-2xl font-semibold">Webhooks</h1>
+          <p className="text-sm text-muted-foreground">
+            Outbound webhook deliveries. Polls every 3s.
+          </p>
+        </div>
+        <span className="text-xs text-muted-foreground">{data?.length ?? 0} rows</span>
       </div>
-      <div className="border rounded-md">
+      <div className="flex-1 min-h-0 overflow-y-auto border rounded-md">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
               <TableHead className="w-40">Time</TableHead>
               <TableHead className="w-24">Status</TableHead>
@@ -91,6 +94,8 @@ export default function WebhooksPage() {
     </div>
   );
 }
+
+
 
 function WebhookDetailDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { data } = useWebhook(id);
