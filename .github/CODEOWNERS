@@ -1,0 +1,12 @@
+# CODEOWNERS for TestPay
+# Each pattern, the LAST matching rule wins.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: everything is owned by the maintainer
+* @prashantluhar
+
+# CI / release / repo infra
+/.github/                 @prashantluhar
+/Makefile                 @prashantluhar
+/deploy/                  @prashantluhar
+/.codecov.yml             @prashantluhar

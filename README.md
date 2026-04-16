@@ -178,6 +178,19 @@ All requests pass through a middleware chain that logs full headers, bodies, and
 
 ---
 
+## Branching & Releases
+
+We follow [GitHub Flow](https://docs.github.com/en/get-started/quickstart/github-flow) with a protected `main` branch.
+
+- All work happens on `feature/`, `fix/`, `chore/`, or `hotfix/` branches
+- Open a PR — CI must pass (90% coverage gate, lint, build, all tests)
+- Squash-merge to `main`
+- Release: maintainer tags `vX.Y.Z` → release workflow builds and publishes the Docker image to GHCR
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full details.
+
+---
+
 ## License
 
 MIT License — see [LICENSE](LICENSE).
