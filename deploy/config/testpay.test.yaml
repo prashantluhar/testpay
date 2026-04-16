@@ -1,0 +1,16 @@
+environment: test
+
+server: { host: 127.0.0.1, port: 7700, mode: local }
+
+database:
+  url_env: DATABASE_URL
+  max_connections: 5
+
+logging: { level: warn, format: json }
+
+webhook: { max_attempts: 1, base_delay_ms: 50, timeout_seconds: 2 }
+
+cloud:
+  provider: none
+
+rate_limit: { requests_per_minute: 100000, burst: 10000 }

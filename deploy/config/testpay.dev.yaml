@@ -1,0 +1,29 @@
+environment: dev
+
+server: { host: 0.0.0.0, port: 7700, mode: hosted }
+
+database:
+  url_env: DATABASE_URL
+  max_connections: 10
+
+logging: { level: debug, format: json }
+
+webhook: { max_attempts: 3, base_delay_ms: 500, timeout_seconds: 10 }
+
+auth:
+  api_key_env: API_KEY
+
+cors:
+  allowed_origins:
+    - https://dev.testpay.dev
+
+cloud:
+  provider: aws
+  aws: { region: us-east-1, s3_bucket: testpay-dev-logs, log_retention_days: 7 }
+
+integrations:
+  sentry:
+    dsn_env: SENTRY_DSN
+    sample_rate: 1.0
+
+rate_limit: { requests_per_minute: 1200, burst: 200 }

@@ -1,0 +1,47 @@
+environment: prod
+
+server:
+  host: 0.0.0.0
+  port: 7700
+  mode: hosted
+  read_timeout_seconds: 30
+  write_timeout_seconds: 30
+  shutdown_timeout_seconds: 30
+
+database:
+  url_env: DATABASE_URL
+  max_connections: 30
+  max_idle_connections: 10
+  connection_timeout_seconds: 10
+
+logging: { level: info, format: json }
+
+webhook: { max_attempts: 5, base_delay_ms: 1000, timeout_seconds: 15 }
+
+auth:
+  api_key_env: API_KEY
+  jwt_secret_env: JWT_SECRET
+
+cors:
+  allowed_origins:
+    - https://app.testpay.dev
+  allowed_methods: [GET, POST, PUT, DELETE, OPTIONS]
+
+cloud:
+  provider: aws
+  aws: { region: us-east-1, s3_bucket: testpay-prod-logs, log_retention_days: 30 }
+
+integrations:
+  sentry:
+    dsn_env: SENTRY_DSN
+    sample_rate: 1.0
+  datadog:
+    enabled: true
+    api_key_env: DATADOG_API_KEY
+    service: testpay
+    env: prod
+  slack:
+    enabled: true
+    webhook_url_env: SLACK_WEBHOOK_URL
+
+rate_limit: { requests_per_minute: 600, burst: 100 }

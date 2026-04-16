@@ -21,14 +21,17 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 
 	eng := engine.New()
 	reg := adapters.NewRegistry()
-	dispatcher := webhook.NewDispatcher(3, 500*time.Millisecond)
+	dispatcher := webhook.NewDispatcher(
+		cfg.Webhook.MaxAttempts,
+		time.Duration(cfg.Webhook.BaseDelayMs)*time.Millisecond,
+	)
 
 	// Global middleware
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.RequestID)
-	r.Use(middleware.Logger(cfg.Mode, "testpay"))
+	r.Use(middleware.Logger(cfg.Environment, "testpay"))
 	r.Use(middleware.GatewayResolver)
-	r.Use(middleware.Auth(cfg.Mode, cfg.APIKey))
+	r.Use(middleware.Auth(cfg.Server.Mode, cfg.Auth.APIKey))
 
 	// Mock gateway endpoints (Stripe, Razorpay, Agnostic)
 	mockHandler := handlers.NewMock(eng, reg, s, dispatcher)
@@ -63,7 +66,9 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 	})
 
 	return &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: r,
+		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+		Handler:      r,
+		ReadTimeout:  time.Duration(cfg.Server.ReadTimeoutSeconds) * time.Second,
+		WriteTimeout: time.Duration(cfg.Server.WriteTimeoutSeconds) * time.Second,
 	}
 }
