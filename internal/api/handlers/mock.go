@@ -85,8 +85,12 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Bool("duplicate_webhook", result.DuplicateWebhook).
 		Msg("simulation step executed")
 
-	// Persist log + dispatch webhook async
+	// Persist log + dispatch webhook async.
+	// context.WithoutCancel keeps the trace_id logger in context but prevents
+	// the goroutine's DB work from being canceled when the HTTP response is
+	// written (r.Context() is canceled after ServeHTTP returns).
 	if h.store != nil {
+		persistCtx := context.WithoutCancel(ctx)
 		chargeID := uuid.NewString()
 		reqLog := &store.RequestLog{
 			ID:             uuid.NewString(),
@@ -104,7 +108,7 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if err := h.store.CreateRequestLog(ctx, l); err != nil {
 				zerolog.Ctx(ctx).Error().Err(err).Str("request_log_id", l.ID).Msg("failed to persist request log")
 			}
-		}(ctx, reqLog)
+		}(persistCtx, reqLog)
 
 		if !result.SkipWebhook && h.dispatcher != nil {
 			targetURL := r.Header.Get("X-Webhook-URL")
@@ -121,8 +125,8 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					if err := h.store.CreateWebhookLog(ctx, l); err != nil {
 						zerolog.Ctx(ctx).Error().Err(err).Str("webhook_log_id", l.ID).Msg("failed to persist webhook log")
 					}
-				}(ctx, wl)
-				webhook.DispatchAsync(ctx, h.dispatcher, h.store, wl, result.WebhookDelayMs)
+				}(persistCtx, wl)
+				webhook.DispatchAsync(persistCtx, h.dispatcher, h.store, wl, result.WebhookDelayMs)
 
 				if result.DuplicateWebhook {
 					wl2 := &store.WebhookLog{
@@ -136,8 +140,8 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						if err := h.store.CreateWebhookLog(ctx, l); err != nil {
 							zerolog.Ctx(ctx).Error().Err(err).Str("webhook_log_id", l.ID).Msg("failed to persist duplicate webhook log")
 						}
-					}(ctx, wl2)
-					webhook.DispatchAsync(ctx, h.dispatcher, h.store, wl2, result.WebhookDelayMs+500)
+					}(persistCtx, wl2)
+					webhook.DispatchAsync(persistCtx, h.dispatcher, h.store, wl2, result.WebhookDelayMs+500)
 				}
 			}
 		}
