@@ -1,13 +1,16 @@
-#requires -version 5.1
+﻿#requires -version 5.1
 <#
 .SYNOPSIS
     End-to-end load test for a running TestPay instance.
 
 .DESCRIPTION
-    Starts a small HTTP listener, creates N users (each gets their own workspace,
-    API key, and per-gateway webhook URLs pointing at the listener), fires K
-    charges per user across all three gateways, verifies webhooks arrive with
-    the right echoed metadata (order_id).
+    Optionally starts a local HTTP listener, creates N users (each with their
+    own workspace and per-gateway webhook URL), fires K charges per user across
+    three gateways, verifies webhooks arrive with echoed metadata (order_id).
+
+    When -WebhookURL is set (default = webhook.site URL), all users share that
+    remote URL and the local listener is skipped. Inspect deliveries in the
+    browser.
 
 .PARAMETER Users
     Number of users to sign up. Default 3.
@@ -21,9 +24,13 @@
 .PARAMETER ListenerPort
     Local port for the webhook listener. Default 9999.
 
+.PARAMETER WebhookURL
+    Remote webhook URL (e.g. webhook.site). Pass '' to use the local listener.
+
 .EXAMPLE
     .\scripts\load-test.ps1
     .\scripts\load-test.ps1 -Users 5 -RequestsPerUser 4
+    .\scripts\load-test.ps1 -WebhookURL ''   # local listener mode
 #>
 
 param(
@@ -31,8 +38,6 @@ param(
     [int]$RequestsPerUser = 2,
     [string]$ApiBase = 'http://localhost:7700',
     [int]$ListenerPort = 9999,
-    # When set, all gateway webhooks for all users are pointed at this single
-    # URL (useful for webhook.site inspection). The local listener is skipped.
     [string]$WebhookURL = 'https://webhook.site/d2c50235-b68a-4af3-a182-206cc01052cb'
 )
 
@@ -45,16 +50,16 @@ Write-Host "Users:                 $Users"
 Write-Host "Per user per gateway:  $RequestsPerUser"
 Write-Host "Gateways:              stripe, razorpay, agnostic"
 if ($UseRemote) {
-    Write-Host "Webhook target:        $WebhookURL  (remote — open in browser to inspect)"
+    Write-Host "Webhook target:        $WebhookURL (remote)"
 } else {
     Write-Host "Webhook target:        http://localhost:$ListenerPort (local listener)"
 }
 Write-Host ''
 
-# ── Listener (in-process, only when not using a remote webhook URL) ──────────
-$counters  = [System.Collections.Concurrent.ConcurrentDictionary[string, int]]::new()
-$payloads  = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
-$listener  = $null
+# Listener (only when not using a remote webhook URL)
+$counters    = [System.Collections.Concurrent.ConcurrentDictionary[string, int]]::new()
+$payloads    = [System.Collections.Concurrent.ConcurrentDictionary[string, string]]::new()
+$listener    = $null
 $listenerJob = $null
 
 if (-not $UseRemote) {
@@ -82,7 +87,7 @@ if (-not $UseRemote) {
     } -ArgumentList $listener, $counters, $payloads
 }
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# Helpers
 function Invoke-Json {
     param(
         [string]$Method,
@@ -98,13 +103,13 @@ function Invoke-Json {
         UseBasicParsing = $true
         ErrorAction     = 'Stop'
     }
-    if ($null -ne $Body)   { $params.Body = ($Body | ConvertTo-Json -Compress -Depth 5) }
-    if ($Headers)          { $params.Headers = $Headers }
-    if ($Session)          { $params.WebSession = $Session }
+    if ($null -ne $Body) { $params.Body = ($Body | ConvertTo-Json -Compress -Depth 5) }
+    if ($Headers)        { $params.Headers = $Headers }
+    if ($Session)        { $params.WebSession = $Session }
     return Invoke-RestMethod @params
 }
 
-# ── 1. Sign up N users ───────────────────────────────────────────────────────
+# 1. Sign up N users
 Write-Host "Signing up $Users users..." -ForegroundColor Yellow
 $userData = @()
 for ($i = 1; $i -le $Users; $i++) {
@@ -120,9 +125,6 @@ for ($i = 1; $i -le $Users; $i++) {
 
     $userKey = "user$i-$suffix"
     if ($UseRemote) {
-        # All gateways for this user share the remote URL; you'll see them all
-        # land on the same webhook.site page, tagged by gateway + user in the
-        # echoed metadata/notes/body of the webhook payload.
         $hooks = @{
             stripe   = $WebhookURL
             razorpay = $WebhookURL
@@ -135,8 +137,7 @@ for ($i = 1; $i -le $Users; $i++) {
             agnostic = "http://localhost:$ListenerPort/$userKey-agnostic"
         }
     }
-    # Authenticate via api_key (Authorization: Bearer) — more reliable across
-    # PowerShell WebSession quirks than the signup cookie.
+    # Auth via api_key Bearer - avoids PowerShell WebSession cookie quirks.
     Invoke-Json -Method PUT -Url "$ApiBase/api/workspace" `
         -Body @{ webhook_urls = $hooks } `
         -Headers @{ Authorization = "Bearer $($signup.workspace.api_key)" } | Out-Null
@@ -147,31 +148,32 @@ for ($i = 1; $i -le $Users; $i++) {
         APIKey = $signup.workspace.api_key
         Hooks  = $hooks
     }
-    Write-Host ("  {0,2}. {1,-40} api_key={2}…  hook_prefix={3}" -f $i, $email,
+    Write-Host ("  {0,2}. {1,-40} api_key={2}..  hook_prefix={3}" -f $i, $email,
         $signup.workspace.api_key.Substring(0, 8), $userKey)
 }
 
 if ($userData.Count -eq 0) {
-    Write-Error 'No users signed up. Aborting.'; $listener.Stop(); exit 1
+    Write-Error 'No users signed up. Aborting.'
+    if ($listener) { $listener.Stop() }
+    exit 1
 }
 
-# ── 2. Fire charges across all 3 gateways ────────────────────────────────────
+# 2. Fire charges across all 3 gateways
 $gateways = @(
-    @{ Name = 'stripe';   Path = '/stripe/v1/charges';   Echo = 'metadata' }
+    @{ Name = 'stripe';   Path = '/stripe/v1/charges';    Echo = 'metadata' }
     @{ Name = 'razorpay'; Path = '/razorpay/v1/payments'; Echo = 'notes'    }
-    @{ Name = 'agnostic'; Path = '/v1/charges';          Echo = 'root'     }
+    @{ Name = 'agnostic'; Path = '/v1/charges';           Echo = 'root'     }
 )
 $totalExpected = $userData.Count * $RequestsPerUser * $gateways.Count
 
 Write-Host ''
-Write-Host "Firing $totalExpected charges ($($userData.Count) users × $RequestsPerUser × $($gateways.Count) gateways)..." -ForegroundColor Yellow
+Write-Host "Firing $totalExpected charges ($($userData.Count) users x $RequestsPerUser x $($gateways.Count) gateways)..." -ForegroundColor Yellow
 $sw   = [System.Diagnostics.Stopwatch]::StartNew()
 $sent = 0
 foreach ($u in $userData) {
     foreach ($gw in $gateways) {
         for ($j = 1; $j -le $RequestsPerUser; $j++) {
             $orderId = "ord-$($u.Key)-$($gw.Name)-$j"
-            # Echo location depends on gateway convention.
             $body = @{ amount = (1000 * $j); currency = 'usd' }
             switch ($gw.Echo) {
                 'metadata' { $body.metadata = @{ order_id = $orderId } }
@@ -191,7 +193,7 @@ foreach ($u in $userData) {
 $sw.Stop()
 Write-Host "  $sent charges sent in $([math]::Round($sw.Elapsed.TotalSeconds, 2))s"
 
-# ── 3. Wait for webhooks ─────────────────────────────────────────────────────
+# 3. Wait for webhooks
 Write-Host ''
 if ($UseRemote) {
     Write-Host 'Waiting 5s for server-side dispatch...' -ForegroundColor Yellow
@@ -211,17 +213,17 @@ if ($UseRemote) {
     }
 }
 
-# ── 4. Report ────────────────────────────────────────────────────────────────
+# 4. Report
 Write-Host ''
 Write-Host '=== Results ===' -ForegroundColor Cyan
 $totalReceived = 0
 if ($UseRemote) {
-    Write-Host "  (Remote webhook URL — inspect delivery here:)"
+    Write-Host "  Remote webhook URL - inspect in browser:"
     Write-Host "  $WebhookURL" -ForegroundColor Cyan
     Write-Host ''
-    Write-Host "  Each user fired $RequestsPerUser requests per gateway × $($gateways.Count) gateways = $($RequestsPerUser * $gateways.Count) webhooks/user."
+    Write-Host "  Each user: $RequestsPerUser per gateway x $($gateways.Count) gateways = $($RequestsPerUser * $gateways.Count) webhooks"
     foreach ($u in $userData) {
-        Write-Host ("  - {0,-40} expects {1} webhooks with order_id prefix ord-{2}-*" -f $u.Email, ($RequestsPerUser * $gateways.Count), $u.Key)
+        Write-Host ("  - {0,-40} order_id prefix: ord-{1}-*" -f $u.Email, $u.Key)
     }
 } else {
     foreach ($u in $userData) {
@@ -242,13 +244,20 @@ if (-not $UseRemote) {
     Write-Host "Total webhooks received:  $totalReceived (expected $totalExpected)"
 }
 
-# Sample echoed metadata from one webhook (proves the order_id round-trips)
+Write-Host ''
+Write-Host 'Tip: log into the dashboard as any test user to view their logs:' -ForegroundColor Yellow
+if ($userData.Count -gt 0) {
+    Write-Host ("  email:    {0}" -f $userData[0].Email)
+    Write-Host "  password: loadtest-password"
+}
+
+# Sample echoed metadata (only when local listener captured payloads)
 if (-not $UseRemote) {
     $sampleKey = "$($userData[0].Key)-stripe#1"
     $sample    = $payloads[$sampleKey]
     if ($sample) {
         Write-Host ''
-        Write-Host 'Sample Stripe webhook payload (first request from first user):' -ForegroundColor Yellow
+        Write-Host 'Sample Stripe webhook payload (first request, first user):' -ForegroundColor Yellow
         try {
             $obj = $sample | ConvertFrom-Json
             $md  = $obj.data.object.metadata
@@ -263,12 +272,16 @@ if (-not $UseRemote) {
 
 try {
     $logs = Invoke-Json -Method GET -Url "$ApiBase/api/logs?limit=1000"
-    Write-Host "Rows in request_logs:     $($logs.Count)"
+    if ($logs) {
+        Write-Host ''
+        Write-Host "/api/logs (anonymous view) row count: $($logs.Count)"
+        Write-Host '(The script users are isolated tenants; log in as them to see their logs.)'
+    }
 } catch {
     Write-Warning "could not query /api/logs: $($_.Exception.Message)"
 }
 
-# ── 5. Cleanup ───────────────────────────────────────────────────────────────
+# 5. Cleanup
 if ($listener)    { $listener.Stop() }
 if ($listenerJob) {
     Stop-Job   -Job $listenerJob -ErrorAction SilentlyContinue | Out-Null
@@ -277,10 +290,14 @@ if ($listenerJob) {
 
 if ($UseRemote) {
     Write-Host ''
-    Write-Host 'DONE — open the webhook URL above in a browser to inspect deliveries.' -ForegroundColor Green
+    Write-Host 'DONE - open the webhook URL above in a browser to inspect deliveries.' -ForegroundColor Green
     exit 0
 } elseif ($totalReceived -eq $totalExpected) {
-    Write-Host ''; Write-Host 'PASS' -ForegroundColor Green; exit 0
+    Write-Host ''
+    Write-Host 'PASS' -ForegroundColor Green
+    exit 0
 } else {
-    Write-Host ''; Write-Host 'PARTIAL / FAIL — some webhooks did not arrive within the timeout.' -ForegroundColor Red; exit 2
+    Write-Host ''
+    Write-Host 'PARTIAL / FAIL - some webhooks did not arrive within the timeout.' -ForegroundColor Red
+    exit 2
 }
