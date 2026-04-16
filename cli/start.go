@@ -20,7 +20,11 @@ import (
 	"github.com/prashantluhar/testpay/web"
 )
 
-var configPath string
+var (
+	configPath    string
+	noDashboard   bool
+	dashboardPort int
+)
 
 var startCmd = &cobra.Command{
 	Use:   "start",
@@ -61,21 +65,27 @@ var startCmd = &cobra.Command{
 			}
 		}()
 
-		// Dashboard server on :7701 (embedded Next.js static export)
-		dashFS, err := fs.Sub(web.Assets, "out")
-		if err != nil {
-			return fmt.Errorf("loading embedded dashboard: %w", err)
-		}
-		dash := &http.Server{
-			Addr:    ":7701",
-			Handler: http.FileServer(http.FS(dashFS)),
-		}
-		go func() {
-			log.Info().Msg("TestPay dashboard running at http://localhost:7701")
-			if err := dash.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Error().Err(err).Msg("dashboard server error")
+		// Optional embedded dashboard server.
+		// Skipped in dev workflow where `pnpm dev` runs on the same port.
+		var dash *http.Server
+		if !noDashboard {
+			dashFS, err := fs.Sub(web.Assets, "out")
+			if err != nil {
+				return fmt.Errorf("loading embedded dashboard: %w", err)
 			}
-		}()
+			dash = &http.Server{
+				Addr:    fmt.Sprintf(":%d", dashboardPort),
+				Handler: http.FileServer(http.FS(dashFS)),
+			}
+			go func() {
+				log.Info().Msgf("TestPay dashboard running at http://localhost:%d", dashboardPort)
+				if err := dash.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					log.Error().Err(err).Msg("dashboard server error")
+				}
+			}()
+		} else {
+			log.Info().Msg("embedded dashboard disabled (--no-dashboard); run `pnpm dev` in web/ separately")
+		}
 
 		quit := make(chan os.Signal, 1)
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -86,11 +96,15 @@ var startCmd = &cobra.Command{
 			time.Duration(cfg.Server.ShutdownTimeoutSeconds)*time.Second,
 		)
 		defer cancel()
-		_ = dash.Shutdown(shutdownCtx)
+		if dash != nil {
+			_ = dash.Shutdown(shutdownCtx)
+		}
 		return srv.Shutdown(shutdownCtx)
 	},
 }
 
 func init() {
 	startCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to testpay.yaml config file")
+	startCmd.Flags().BoolVar(&noDashboard, "no-dashboard", false, "Disable the embedded dashboard (use `pnpm dev` in web/ instead)")
+	startCmd.Flags().IntVar(&dashboardPort, "dashboard-port", 7701, "Port for the embedded dashboard")
 }
