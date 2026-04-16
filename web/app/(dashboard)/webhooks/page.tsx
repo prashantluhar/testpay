@@ -16,6 +16,16 @@ import { StatusChip } from '@/components/common/status-chip';
 import { useWebhooks, useWebhook } from '@/lib/hooks';
 import type { WebhookLog } from '@/lib/types';
 
+// Short relative-time like "4s", "2m", "1h", else an absolute short timestamp.
+function shortTime(iso: string) {
+  const then = new Date(iso).getTime();
+  const diff = Date.now() - then;
+  if (diff < 60_000) return `${Math.max(1, Math.floor(diff / 1000))}s ago`;
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
 function statusVariant(status: string) {
   switch (status) {
     case 'delivered':
@@ -47,32 +57,44 @@ export default function WebhooksPage() {
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto border rounded-md">
         <Table>
-          <TableHeader className="sticky top-0 bg-card z-10">
-            <TableRow>
-              <TableHead className="w-40">Time</TableHead>
-              <TableHead className="w-24">Status</TableHead>
-              <TableHead className="w-16">Attempts</TableHead>
-              <TableHead>Target URL</TableHead>
-              <TableHead className="w-40">Request ID</TableHead>
+          <TableHeader className="sticky top-0 bg-card/95 backdrop-blur z-10">
+            <TableRow className="border-b">
+              <TableHead className="w-36 text-xs uppercase tracking-wider">Time</TableHead>
+              <TableHead className="w-24 text-xs uppercase tracking-wider">Status</TableHead>
+              <TableHead className="w-20 text-xs uppercase tracking-wider text-center">Attempts</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider">Target URL</TableHead>
+              <TableHead className="w-32 text-xs uppercase tracking-wider">Request ID</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data?.map((w) => (
               <TableRow
                 key={w.id}
-                className="cursor-pointer font-mono text-xs"
+                className="row-accent cursor-pointer font-mono text-xs border-0 transition-colors"
                 onClick={() => setSelected(w.id)}
               >
                 <TableCell className="text-muted-foreground">
-                  {new Date(w.created_at).toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  <span className={`inline-flex rounded px-2 py-0.5 text-xs ${statusVariant(w.delivery_status)}`}>
-                    {w.delivery_status}
+                  <span title={new Date(w.created_at).toLocaleString()}>
+                    {shortTime(w.created_at)}
                   </span>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline">{w.attempts}</Badge>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${statusVariant(w.delivery_status)}`}
+                  >
+                    {w.delivery_status === 'delivered' && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    )}
+                    {w.delivery_status === 'failed' && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                    )}
+                    {w.delivery_status}
+                  </span>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge variant="outline" className="tabular-nums">
+                    {w.attempts}
+                  </Badge>
                 </TableCell>
                 <TableCell className="truncate max-w-sm">{w.target_url}</TableCell>
                 <TableCell className="text-muted-foreground truncate">
@@ -82,8 +104,11 @@ export default function WebhooksPage() {
             ))}
             {data && data.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                  No webhooks yet. Configure webhook URLs in Settings and fire a mock charge.
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-12">
+                  <div className="text-sm">No webhooks yet</div>
+                  <div className="text-xs mt-1">
+                    Configure URLs in Settings, then fire a mock charge.
+                  </div>
                 </TableCell>
               </TableRow>
             )}
