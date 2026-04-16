@@ -8,8 +8,8 @@ export function LiveFeed() {
   const { data, error, mutate } = useLogs({ limit: 50, pollInterval: 2000 });
 
   if (error) return <ErrorState message="Failed to load live feed" onRetry={() => mutate()} />;
-  if (!data) return <div className="text-sm text-muted-foreground p-4">Loading…</div>;
-  if (data.length === 0)
+  if (data === undefined) return <div className="text-sm text-muted-foreground p-4">Loading…</div>;
+  if (!data || data.length === 0)
     return (
       <div className="p-6 text-center text-sm text-muted-foreground">
         No requests yet — point your app at the mock endpoint above.

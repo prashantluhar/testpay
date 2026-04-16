@@ -119,7 +119,7 @@ func (s *Store) ListScenarios(ctx context.Context, workspaceID string) ([]*store
 	}
 	defer rows.Close()
 
-	var out []*store.Scenario
+	out := make([]*store.Scenario, 0)
 	for rows.Next() {
 		sc, scanErr := scanScenario(rows)
 		if scanErr != nil {
@@ -287,7 +287,7 @@ func (s *Store) ListRequestLogs(ctx context.Context, workspaceID string, limit, 
 	}
 	defer rows.Close()
 
-	var out []*store.RequestLog
+	out := make([]*store.RequestLog, 0)
 	for rows.Next() {
 		l, scanErr := scanRequestLog(rows)
 		if scanErr != nil {
