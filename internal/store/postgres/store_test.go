@@ -100,3 +100,33 @@ func TestSessionLifecycle(t *testing.T) {
 	_, err = s.GetActiveSession(ctx, w.ID)
 	assert.Error(t, err)
 }
+
+func TestUserCredentials(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	w := &store.Workspace{ID: uuid.NewString(), Slug: "ws-auth", APIKey: "key_auth"}
+	require.NoError(t, s.CreateWorkspace(ctx, w))
+
+	u := &store.User{
+		ID:          uuid.NewString(),
+		WorkspaceID: w.ID,
+		Email:       "alice@example.com",
+		Role:        "owner",
+	}
+	require.NoError(t, s.CreateUser(ctx, u, "hashed-password"))
+
+	got, hash, err := s.GetUserByEmail(ctx, "alice@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, u.ID, got.ID)
+	assert.Equal(t, "hashed-password", hash)
+
+	by, err := s.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "alice@example.com", by.Email)
+
+	require.NoError(t, s.UpdateUserLastLogin(ctx, u.ID, time.Now()))
+
+	_, _, err = s.GetUserByEmail(ctx, "nobody@example.com")
+	assert.Error(t, err)
+}

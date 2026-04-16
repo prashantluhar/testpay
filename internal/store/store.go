@@ -1,6 +1,9 @@
 package store
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // LocalWorkspaceID is the fixed workspace ID used in local (single-tenant) mode.
 const LocalWorkspaceID = "00000000-0000-0000-0000-000000000001"
@@ -37,4 +40,10 @@ type Store interface {
 	CreateWebhookLog(ctx context.Context, l *WebhookLog) error
 	UpdateWebhookLog(ctx context.Context, l *WebhookLog) error
 	GetWebhookLogByRequestID(ctx context.Context, requestLogID string) (*WebhookLog, error)
+
+	// Users
+	CreateUser(ctx context.Context, u *User, passwordHash string) error
+	GetUserByEmail(ctx context.Context, email string) (*User, string, error)
+	GetUserByID(ctx context.Context, id string) (*User, error)
+	UpdateUserLastLogin(ctx context.Context, id string, at time.Time) error
 }

@@ -363,6 +363,57 @@ func (s *Store) GetWebhookLogByRequestID(ctx context.Context, requestLogID strin
 	return &l, nil
 }
 
+// ── Users ────────────────────────────────────────────────────────────────────
+
+func (s *Store) CreateUser(ctx context.Context, u *store.User, passwordHash string) error {
+	start := time.Now()
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO users (id, workspace_id, email, role, password_hash)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		u.ID, u.WorkspaceID, u.Email, u.Role, passwordHash,
+	)
+	logSlow(ctx, "CreateUser", start, err)
+	return err
+}
+
+func (s *Store) GetUserByEmail(ctx context.Context, email string) (*store.User, string, error) {
+	start := time.Now()
+	var u store.User
+	var hash string
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, workspace_id, email, role, created_at, password_hash
+		 FROM users WHERE email = $1`, email,
+	).Scan(&u.ID, &u.WorkspaceID, &u.Email, &u.Role, &u.CreatedAt, &hash)
+	logSlow(ctx, "GetUserByEmail", start, err)
+	if err != nil {
+		return nil, "", err
+	}
+	return &u, hash, nil
+}
+
+func (s *Store) GetUserByID(ctx context.Context, id string) (*store.User, error) {
+	start := time.Now()
+	var u store.User
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, workspace_id, email, role, created_at
+		 FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &u.WorkspaceID, &u.Email, &u.Role, &u.CreatedAt)
+	logSlow(ctx, "GetUserByID", start, err)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (s *Store) UpdateUserLastLogin(ctx context.Context, id string, at time.Time) error {
+	start := time.Now()
+	_, err := s.pool.Exec(ctx,
+		`UPDATE users SET last_login_at = $1 WHERE id = $2`, at, id,
+	)
+	logSlow(ctx, "UpdateUserLastLogin", start, err)
+	return err
+}
+
 // ConnectPool opens a pgxpool connection and pings it.
 func ConnectPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.New(ctx, dsn)
