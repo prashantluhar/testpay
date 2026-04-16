@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, ListTodo, ScrollText, Settings, Zap, LogOut, LogIn } from 'lucide-react';
+import { LayoutDashboard, ListTodo, ScrollText, Settings, Zap, LogOut, LogIn, Send } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { User, Workspace } from '@/lib/types';
 
@@ -9,6 +9,7 @@ const items = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/scenarios', label: 'Scenarios', icon: ListTodo },
   { href: '/logs', label: 'Logs', icon: ScrollText },
+  { href: '/webhooks', label: 'Webhooks', icon: Send },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

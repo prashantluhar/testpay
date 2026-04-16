@@ -417,6 +417,62 @@ func (s *Store) GetWebhookLogByRequestID(ctx context.Context, requestLogID strin
 	return &l, nil
 }
 
+func (s *Store) GetWebhookLog(ctx context.Context, id string) (*store.WebhookLog, error) {
+	start := time.Now()
+	var l store.WebhookLog
+	var payload, attemptLogs []byte
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, request_log_id, payload, target_url, delivery_status, attempts, attempt_logs, delivered_at, created_at
+		 FROM webhook_logs WHERE id = $1`, id,
+	).Scan(&l.ID, &l.RequestLogID, &payload, &l.TargetURL, &l.DeliveryStatus,
+		&l.Attempts, &attemptLogs, &l.DeliveredAt, &l.CreatedAt)
+	if err != nil {
+		logSlow(ctx, "GetWebhookLog", start, err)
+		return nil, err
+	}
+	json.Unmarshal(payload, &l.Payload)
+	json.Unmarshal(attemptLogs, &l.AttemptLogs)
+	logSlow(ctx, "GetWebhookLog", start, nil)
+	return &l, nil
+}
+
+// ListWebhookLogs returns webhook logs whose parent request_log belongs to the
+// given workspace. Newest first.
+func (s *Store) ListWebhookLogs(ctx context.Context, workspaceID string, limit, offset int) ([]*store.WebhookLog, error) {
+	start := time.Now()
+	rows, err := s.pool.Query(ctx,
+		`SELECT wl.id, wl.request_log_id, wl.payload, wl.target_url, wl.delivery_status,
+		        wl.attempts, wl.attempt_logs, wl.delivered_at, wl.created_at
+		 FROM webhook_logs wl
+		 JOIN request_logs rl ON rl.id = wl.request_log_id
+		 WHERE rl.workspace_id = $1
+		 ORDER BY wl.created_at DESC
+		 LIMIT $2 OFFSET $3`,
+		workspaceID, limit, offset,
+	)
+	if err != nil {
+		logSlow(ctx, "ListWebhookLogs", start, err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]*store.WebhookLog, 0)
+	for rows.Next() {
+		var l store.WebhookLog
+		var payload, attemptLogs []byte
+		if scanErr := rows.Scan(&l.ID, &l.RequestLogID, &payload, &l.TargetURL, &l.DeliveryStatus,
+			&l.Attempts, &attemptLogs, &l.DeliveredAt, &l.CreatedAt); scanErr != nil {
+			logSlow(ctx, "ListWebhookLogs", start, scanErr)
+			return nil, scanErr
+		}
+		json.Unmarshal(payload, &l.Payload)
+		json.Unmarshal(attemptLogs, &l.AttemptLogs)
+		out = append(out, &l)
+	}
+	logSlow(ctx, "ListWebhookLogs", start, rows.Err())
+	return out, rows.Err()
+}
+
 // ── Users ────────────────────────────────────────────────────────────────────
 
 func (s *Store) CreateUser(ctx context.Context, u *store.User, passwordHash string) error {

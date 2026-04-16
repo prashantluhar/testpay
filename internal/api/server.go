@@ -70,7 +70,9 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 			r.Post("/{id}/replay", handlers.ReplayLog(s, eng, reg, dispatcher))
 		})
 		r.Route("/webhooks", func(r chi.Router) {
+			r.Get("/", handlers.ListWebhooks(s))
 			r.Post("/test", handlers.TestWebhook(dispatcher))
+			r.Get("/{id}", handlers.GetWebhook(s))
 			r.Get("/{id}/status", handlers.GetWebhookStatus(s))
 		})
 	})

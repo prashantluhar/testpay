@@ -42,6 +42,8 @@ type Store interface {
 	CreateWebhookLog(ctx context.Context, l *WebhookLog) error
 	UpdateWebhookLog(ctx context.Context, l *WebhookLog) error
 	GetWebhookLogByRequestID(ctx context.Context, requestLogID string) (*WebhookLog, error)
+	GetWebhookLog(ctx context.Context, id string) (*WebhookLog, error)
+	ListWebhookLogs(ctx context.Context, workspaceID string, limit, offset int) ([]*WebhookLog, error)
 
 	// Users
 	CreateUser(ctx context.Context, u *User, passwordHash string) error

@@ -43,3 +43,18 @@ export function useLog(id: string | null) {
     swrFetcher,
   );
 }
+
+export function useWebhooks(filters: { limit?: number; offset?: number; pollInterval?: number } = {}) {
+  const params = new URLSearchParams();
+  if (filters.limit) params.set('limit', String(filters.limit));
+  if (filters.offset) params.set('offset', String(filters.offset));
+  const qs = params.toString();
+  const opts: SWRConfiguration = filters.pollInterval
+    ? { refreshInterval: filters.pollInterval }
+    : {};
+  return useSWR<WebhookLog[]>(`/api/webhooks${qs ? '?' + qs : ''}`, swrFetcher, opts);
+}
+
+export function useWebhook(id: string | null) {
+  return useSWR<WebhookLog>(id ? `/api/webhooks/${id}` : null, swrFetcher);
+}
