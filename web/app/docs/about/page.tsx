@@ -110,24 +110,28 @@ export default function AboutPage() {
             </Table.Header>
             <Table.Body>
               <SaveRow
-                pain={'"How do I force a bank timeout?" — wait for the sandbox to happen to do it, or open a support ticket'}
-                win={'Run scenario run bank-timeout — the exact failure fires every time'}
+                pain={'"How do I force a bank timeout to test my retry logic?" — wait for the PSP sandbox to happen to return one, or open a support ticket.'}
+                win={'Set X-TestPay-Outcome: bank_timeout on one request. The exact failure fires, deterministically, every time.'}
               />
               <SaveRow
-                pain={'CI depends on the PSP test mode. Build broke because their sandbox is rate-limited.'}
-                win={'Local binary. No external dependency, no flaky builds.'}
+                pain={'CI breaks because a PSP test mode rate-limited the build agent or had a regional outage.'}
+                win={'Local binary. No external dependency. CI never touches a real gateway.'}
               />
               <SaveRow
-                pain={'Shipped a bug that only triggers on duplicate webhook — can\'t reproduce locally.'}
-                win={'webhook_duplicate fires on demand. One click to replay.'}
+                pain={'Shipped a bug that only triggers on duplicate webhook delivery — can\'t reproduce it locally.'}
+                win={'webhook_duplicate is a first-class failure mode. One header to replay.'}
               />
               <SaveRow
-                pain={'"3DS cancel" bug report. Never been able to trigger one in dev.'}
-                win={'redirect_abandoned scenario. 50 ms.'}
+                pain={'Bug report cites 3DS cancellation. You have never been able to trigger one in a dev environment.'}
+                win={'redirect_abandoned scenario. Completes in under 50 ms.'}
               />
               <SaveRow
-                pain={'New engineer needs to test the integration. Doesn\'t have test API keys.'}
-                win={'One binary. No accounts. Same env for everyone.'}
+                pain={'New engineer needs to test the integration end-to-end. No shared test credentials, no MFA on the sandbox account.'}
+                win={'One binary, one workspace. Same environment for everyone.'}
+              />
+              <SaveRow
+                pain={'Need to verify the same SDK call behaves differently on retry — first fails, second succeeds.'}
+                win={'Multi-step scenarios + a session: call 1 → step 0, call 2 → step 1. No code changes in the SDK.'}
               />
             </Table.Body>
           </Table.Root>
@@ -139,12 +143,12 @@ export default function AboutPage() {
           How it helps day-to-day
         </Heading>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FeatureCard title="28 failure modes" body="bank, PG, webhook, redirect/3DS, charge anomalies, async state transitions — all reachable via a single X-TestPay-Outcome header" />
-          <FeatureCard title="Named scenarios" body="Save sequences of failure modes as replayable test fixtures — multi-step sequences advance across SDK calls automatically" />
-          <FeatureCard title="Full logging" body="Every request, header, response, and webhook delivery logged to Postgres with 8 KB of per-attempt response body captured" />
-          <FeatureCard title="Webhook debugger" body="Inspect delivery attempts, retry history, payloads — know exactly what your endpoint saw on each try" />
-          <FeatureCard title="Zero code change" body="Point your SDK at localhost:7700/stripe and it just works — drop-in replacement for Stripe, Razorpay, Adyen, 10 more" />
-          <FeatureCard title="Single binary" body="Embedded dashboard + API, Docker image under 20 MB, runs on Render free tier with no cloud bill" />
+          <FeatureCard title="28 failure modes" body="Bank declines, PG timeouts, webhook anomalies, redirect / 3DS abandonment, charge duplicates, async state transitions — all reachable with one header." />
+          <FeatureCard title="Named scenarios" body="Save a sequence of failure modes as a replayable fixture. Multi-step scenarios advance across SDK calls automatically, no code changes on the caller side." />
+          <FeatureCard title="Full logging" body="Every request, header, response, and webhook delivery logged to Postgres. Per-attempt response bodies captured up to 8 KB so you see exactly what your endpoint returned." />
+          <FeatureCard title="Webhook debugger" body="Inspect each delivery attempt, retry history, payload, status, and latency — plus the originating request in the same drawer." />
+          <FeatureCard title="Zero code change" body="Point your Stripe / Razorpay / Adyen SDK at the mock and it just works. 10 production-shape gateways supported out of the box." />
+          <FeatureCard title="Single binary" body="Embedded dashboard + API in one Go binary. Docker image under 20 MB. Runs on Render free tier with no cloud bill." />
         </div>
       </section>
 
@@ -153,11 +157,11 @@ export default function AboutPage() {
           Cost efficiency
         </Heading>
         <Flex direction="column" gap="3">
-          <CostRow label="$0 self-hosted" body="Single Go binary + Postgres. Drops into any host. No per-seat or per-environment licensing." />
-          <CostRow label="$0 hosted demo" body="Render + Neon free tiers. Enough for team demos, hackathons, portfolios." />
-          <CostRow label="Zero external API burn" body="Your CI and local dev never hit a real gateway's sandbox — no rate-limit bites, no paid simulation tools like WireMock Cloud." />
-          <CostRow label="Replaces two categories" body="Payment sandboxes (handled by PSPs but flaky) and generic HTTP mocks (need to hand-roll each response shape). TestPay ships production-accurate gateway shapes out of the box." />
-          <CostRow label="Faster onboarding" body="A new engineer is productive in 5 minutes, no test credentials to provision, no MFA on a shared sandbox account." />
+          <CostRow label="$0 self-hosted" body="Single Go binary + Postgres. Drops into any host. No per-seat or per-environment licensing, ever." />
+          <CostRow label="$0 hosted demo" body="Render + Neon free tiers. Enough for team demos, hackathons, and portfolio sites." />
+          <CostRow label="No external API burn" body="Your CI and local dev never hit a real PSP sandbox — no rate-limit bites, no paid simulation tools like WireMock Cloud." />
+          <CostRow label="Replaces two categories" body="PSP sandboxes (flaky, quota-limited, can\u2019t trigger arbitrary failures) and generic HTTP mocks (you hand-roll every response shape). TestPay ships production-accurate gateway shapes out of the box." />
+          <CostRow label="Faster onboarding" body="New engineers are productive in five minutes. No test credentials to provision, no MFA on a shared sandbox account, no Slack thread to get access." />
         </Flex>
       </section>
 
@@ -172,25 +176,25 @@ export default function AboutPage() {
             step="1"
             title="Skim the getting-started page"
             href="/docs"
-            desc="30 seconds. Gives you the one-line curl that proves the mock is alive."
+            desc="30 seconds. Gives you the one-line curl that proves the mock is reachable."
           />
           <NextStep
             step="2"
             title="Point your SDK at the mock"
             href="/docs/point-your-sdk"
-            desc="Stripe SDK, Razorpay, Adyen — each has a copy-pasteable base-URL override snippet."
+            desc="Stripe, Razorpay, Adyen — each has a copy-pasteable base-URL override."
           />
           <NextStep
             step="3"
             title="Browse the 28 failure modes"
             href="/docs/failure-modes"
-            desc="Pick the one you want to reproduce; grab its wire name; drop it in an X-TestPay-Outcome header."
+            desc="Pick the one you want to reproduce, grab its wire name, drop it in an X-TestPay-Outcome header."
           />
           <NextStep
             step="4"
             title="Create an account to keep your logs"
             href="/signup"
-            desc="Free. Gives you a persistent workspace + dashboard + webhook debugger."
+            desc="Free. Persistent workspace, dashboard, webhook debugger, and 10-day log retention."
           />
         </Flex>
       </section>
@@ -200,15 +204,16 @@ export default function AboutPage() {
           Open source
         </Heading>
         <Text size="3" as="p">
-          MIT-licensed, source on{' '}
+          MIT-licensed. Source at{' '}
           <Link
             href="https://github.com/prashantluhar/testpay"
             target="_blank"
+            rel="noreferrer"
             className="underline text-[var(--accent-11)]"
           >
             github.com/prashantluhar/testpay
           </Link>
-          . Self-host it with one Go build, or use the hosted demo — both free.{' '}
+          . Self-host it with one <code className="font-mono">go build</code>, or use the hosted demo — both free.{' '}
           <Link href="/docs" className="underline text-[var(--accent-11)]">
             Read the docs →
           </Link>

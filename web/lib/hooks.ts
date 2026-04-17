@@ -101,3 +101,17 @@ export function useWebhook(id: string | null) {
 export function useGateways() {
   return useSWR<string[]>('/api/gateways', swrFetcher, { revalidateOnFocus: false });
 }
+
+export interface WorkspaceUsage {
+  used_today: number;
+  cap: number | null;
+}
+
+// Polls the workspace's rolling-24h request count every 30s so the quota
+// pill in the topbar stays fresh without a full page reload.
+export function useWorkspaceUsage() {
+  return useSWR<WorkspaceUsage>('/api/workspace/usage', swrFetcher, {
+    refreshInterval: 30_000,
+    revalidateOnFocus: true,
+  });
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/prashantluhar/testpay/internal/api/middleware"
 	"github.com/prashantluhar/testpay/internal/store"
@@ -67,6 +68,42 @@ func GetWorkspace(s store.Store) http.HandlerFunc {
 		zerolog.Ctx(ctx).Info().Str("handler", "GetWorkspace").Str("workspace_id", ws.ID).Msg("handler exit")
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(ws)
+	}
+}
+
+// WorkspaceUsage returns the current workspace's 24h request count and its
+// configured daily cap. Frontend polls this to render the quota pill. Cheap —
+// one indexed COUNT on request_logs.
+//
+// Response shape:
+//
+//	{ "used_today": 47, "cap": 200 }
+//
+// `cap` is nil when the workspace is unlimited (standard signed-up case).
+// Frontend hides the pill entirely in that case.
+func WorkspaceUsage(s store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := zerolog.Ctx(ctx)
+
+		ws, err := WorkspaceFromRequest(r, s)
+		if err != nil {
+			http.Error(w, `{"error":"workspace not found"}`, 404)
+			return
+		}
+		dayAgo := time.Now().Add(-24 * time.Hour)
+		used, cerr := s.CountRequestsSince(ctx, ws.ID, dayAgo)
+		if cerr != nil {
+			log.Error().Err(cerr).Str("handler", "WorkspaceUsage").Msg("count failed")
+			http.Error(w, `{"error":"usage lookup failed"}`, 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"used_today": used,
+			"cap":        ws.MaxDailyRequests, // *int — marshals as null if nil
+		})
 	}
 }
 
