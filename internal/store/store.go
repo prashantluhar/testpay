@@ -32,6 +32,10 @@ type Store interface {
 	CreateSession(ctx context.Context, s *Session) error
 	GetActiveSession(ctx context.Context, workspaceID string) (*Session, error)
 	DeleteSession(ctx context.Context, id string) error
+	// BumpSessionCallIndex atomically increments the session's call_index and
+	// returns the PRE-bump value. Used by the mock handler to resolve which
+	// step of a multi-step scenario the current call corresponds to.
+	BumpSessionCallIndex(ctx context.Context, sessionID string) (int, error)
 
 	// RequestLogs
 	CreateRequestLog(ctx context.Context, l *RequestLog) error

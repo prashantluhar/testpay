@@ -275,10 +275,10 @@ func (s *Store) GetActiveSession(ctx context.Context, workspaceID string) (*stor
 	start := time.Now()
 	var sess store.Session
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, scenario_id, ttl_seconds, expires_at, created_at
+		`SELECT id, workspace_id, scenario_id, ttl_seconds, expires_at, call_index, created_at
 		 FROM sessions WHERE workspace_id = $1 AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1`,
 		workspaceID,
-	).Scan(&sess.ID, &sess.WorkspaceID, &sess.ScenarioID, &sess.TTLSeconds, &sess.ExpiresAt, &sess.CreatedAt)
+	).Scan(&sess.ID, &sess.WorkspaceID, &sess.ScenarioID, &sess.TTLSeconds, &sess.ExpiresAt, &sess.CallIndex, &sess.CreatedAt)
 	if err != nil {
 		logSlow(ctx, "GetActiveSession", start, err)
 		return nil, fmt.Errorf("no active session: %w", err)
@@ -294,6 +294,26 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 	return err
 }
 
+// BumpSessionCallIndex increments call_index by 1 atomically and returns the
+// PRE-bump value so callers can use it as the step index for the current
+// request without a round-trip + race.
+func (s *Store) BumpSessionCallIndex(ctx context.Context, sessionID string) (int, error) {
+	start := time.Now()
+	var pre int
+	err := s.pool.QueryRow(ctx,
+		`UPDATE sessions
+		 SET call_index = call_index + 1
+		 WHERE id = $1
+		 RETURNING call_index - 1`,
+		sessionID,
+	).Scan(&pre)
+	logSlow(ctx, "BumpSessionCallIndex", start, err)
+	if err != nil {
+		return 0, fmt.Errorf("bump session call_index: %w", err)
+	}
+	return pre, nil
+}
+
 // ── RequestLogs ──────────────────────────────────────────────────────────────
 
 func (s *Store) CreateRequestLog(ctx context.Context, l *store.RequestLog) error {
@@ -305,11 +325,13 @@ func (s *Store) CreateRequestLog(ctx context.Context, l *store.RequestLog) error
 
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO request_logs
-		 (id, workspace_id, scenario_run_id, gateway, method, path,
+		 (id, workspace_id, scenario_run_id, scenario_id, merchant_order_id,
+		  gateway, method, path,
 		  request_headers, request_body, response_headers, response_body,
 		  response_status, duration_ms, client_ip)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-		l.ID, l.WorkspaceID, l.ScenarioRunID, l.Gateway, l.Method, l.Path,
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+		l.ID, l.WorkspaceID, l.ScenarioRunID, l.ScenarioID, l.MerchantOrderID,
+		l.Gateway, l.Method, l.Path,
 		reqHeaders, reqBody, respHeaders, respBody,
 		l.ResponseStatus, l.DurationMs, l.ClientIP,
 	)
@@ -320,7 +342,8 @@ func (s *Store) CreateRequestLog(ctx context.Context, l *store.RequestLog) error
 func (s *Store) ListRequestLogs(ctx context.Context, workspaceID string, limit, offset int) ([]*store.RequestLog, error) {
 	start := time.Now()
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, workspace_id, scenario_run_id, gateway, method, path,
+		`SELECT id, workspace_id, scenario_run_id, scenario_id, merchant_order_id,
+		        gateway, method, path,
 		        request_headers, request_body, response_headers, response_body,
 		        response_status, duration_ms, client_ip, created_at
 		 FROM request_logs WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
@@ -349,7 +372,8 @@ func (s *Store) ListRequestLogs(ctx context.Context, workspaceID string, limit, 
 func (s *Store) GetRequestLog(ctx context.Context, id string) (*store.RequestLog, error) {
 	start := time.Now()
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, scenario_run_id, gateway, method, path,
+		`SELECT id, workspace_id, scenario_run_id, scenario_id, merchant_order_id,
+		        gateway, method, path,
 		        request_headers, request_body, response_headers, response_body,
 		        response_status, duration_ms, client_ip, created_at
 		 FROM request_logs WHERE id = $1`, id)
@@ -361,9 +385,14 @@ func (s *Store) GetRequestLog(ctx context.Context, id string) (*store.RequestLog
 func scanRequestLog(row interface{ Scan(...any) error }) (*store.RequestLog, error) {
 	var l store.RequestLog
 	var reqH, reqB, respH, respB []byte
-	if err := row.Scan(&l.ID, &l.WorkspaceID, &l.ScenarioRunID, &l.Gateway, &l.Method, &l.Path,
+	var merchant *string
+	if err := row.Scan(&l.ID, &l.WorkspaceID, &l.ScenarioRunID, &l.ScenarioID, &merchant,
+		&l.Gateway, &l.Method, &l.Path,
 		&reqH, &reqB, &respH, &respB, &l.ResponseStatus, &l.DurationMs, &l.ClientIP, &l.CreatedAt); err != nil {
 		return nil, err
+	}
+	if merchant != nil {
+		l.MerchantOrderID = *merchant
 	}
 	json.Unmarshal(reqH, &l.RequestHeaders)
 	json.Unmarshal(reqB, &l.RequestBody)

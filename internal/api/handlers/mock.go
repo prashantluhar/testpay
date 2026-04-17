@@ -111,12 +111,49 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Msg("request body parsed")
 
 	// ── 4. Resolve scenario ─────────────────────────────────────────────────
+	// Priority:
+	//   1. X-TestPay-Outcome header — inline single-step override, no scenario
+	//      needed. Builds an ephemeral scenario on the fly from the header value.
+	//   2. X-TestPay-Scenario-ID header — per-request override, no session needed
+	//   3. Active session for this workspace — the session's scenario drives
+	//      multi-step behavior (see step-index block below)
+	//   4. Workspace default scenario
+	//   5. Built-in "always succeed" fallback
+	//
+	// For paths 1/2/4/5 step 0 fires every time. For path 3 we bump the
+	// session's call_index and use (pre-bump % len(steps)) so scenarios
+	// with multiple steps advance across successive SDK calls.
 	var sc *store.Scenario
-	var stepIndex int
+	var activeSession *store.Session
+	stepIndex := 0
+
+	if outcome := r.Header.Get("X-TestPay-Outcome"); outcome != "" {
+		if engine.IsValidMode(outcome) {
+			sc = &store.Scenario{Steps: []store.Step{{Event: "charge", Outcome: outcome}}}
+			log.Info().Str("step", "scenario_from_outcome").Str("outcome", outcome).Msg("scenario synthesized from X-TestPay-Outcome")
+		} else {
+			log.Warn().Str("step", "outcome_header_invalid").Str("outcome", outcome).Msg("X-TestPay-Outcome not a recognized mode; falling back")
+		}
+	}
+
 	if h.store != nil {
-		sess, _ := h.store.GetActiveSession(ctx, workspaceID)
-		if sess != nil {
-			sc, _ = h.store.GetScenario(ctx, sess.ScenarioID)
+		if sc == nil {
+			if headerID := r.Header.Get("X-TestPay-Scenario-ID"); headerID != "" {
+				if s2, err := h.store.GetScenario(ctx, headerID); err == nil && s2 != nil {
+					sc = s2
+					log.Info().Str("step", "scenario_from_header").Str("scenario_id", headerID).Msg("scenario resolved via X-TestPay-Scenario-ID")
+				} else {
+					log.Warn().Str("step", "scenario_header_invalid").Str("scenario_id", headerID).Msg("X-TestPay-Scenario-ID did not resolve; falling back")
+				}
+			}
+		}
+		if sc == nil {
+			if sess, err := h.store.GetActiveSession(ctx, workspaceID); err == nil && sess != nil {
+				if s2, serr := h.store.GetScenario(ctx, sess.ScenarioID); serr == nil && s2 != nil {
+					sc = s2
+					activeSession = sess
+				}
+			}
 		}
 		if sc == nil {
 			sc, _ = h.store.GetDefaultScenario(ctx, workspaceID)
@@ -124,6 +161,17 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if sc == nil {
 		sc = &store.Scenario{Steps: []store.Step{{Event: "charge", Outcome: "success"}}}
+	}
+
+	// If the scenario came from an active session, advance the per-session
+	// call counter atomically so each call gets the next step.
+	if activeSession != nil && h.store != nil && len(sc.Steps) > 0 {
+		pre, berr := h.store.BumpSessionCallIndex(ctx, activeSession.ID)
+		if berr == nil {
+			stepIndex = pre % len(sc.Steps)
+		} else {
+			log.Warn().Err(berr).Str("step", "bump_session_call_index").Msg("failed to bump session call_index; using step 0")
+		}
 	}
 	log.Info().
 		Str("step", "scenario_resolved").
@@ -177,9 +225,19 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Only record scenario_id when a real scenario drove this request.
+		// The built-in "always succeed" fallback has no ID so sc.ID is empty.
+		var scenarioIDPtr *string
+		if sc != nil && sc.ID != "" {
+			sid := sc.ID
+			scenarioIDPtr = &sid
+		}
+
 		reqLog := &store.RequestLog{
 			ID:              uuid.NewString(),
 			WorkspaceID:     workspaceID,
+			ScenarioID:      scenarioIDPtr,
+			MerchantOrderID: merchantOrderID,
 			Gateway:         adapter.Name(),
 			Method:          r.Method,
 			Path:            r.URL.Path,

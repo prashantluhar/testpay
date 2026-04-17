@@ -252,6 +252,17 @@ func (f *fakeStore) DeleteSession(_ context.Context, id string) error {
 	delete(f.sessions, id)
 	return nil
 }
+func (f *fakeStore) BumpSessionCallIndex(_ context.Context, sessionID string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	sess, ok := f.sessions[sessionID]
+	if !ok {
+		return 0, fmt.Errorf("session not found")
+	}
+	pre := sess.CallIndex
+	sess.CallIndex++
+	return pre, nil
+}
 
 // Request logs -----------------------------------------------------------
 

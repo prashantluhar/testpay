@@ -50,7 +50,11 @@ type Session struct {
 	ScenarioID  string    `json:"scenario_id"`
 	TTLSeconds  int       `json:"ttl_seconds"`
 	ExpiresAt   time.Time `json:"expires_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	// CallIndex tracks how many live mock calls this session has served.
+	// mock.go uses it to advance through multi-step scenarios:
+	//   stepIndex = call_index % len(steps)
+	CallIndex int       `json:"call_index"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type AttemptLog struct {
@@ -65,6 +69,15 @@ type RequestLog struct {
 	ID              string            `json:"id"`
 	WorkspaceID     string            `json:"workspace_id"`
 	ScenarioRunID   *string           `json:"scenario_run_id,omitempty"`
+	// ScenarioID is the scenario that drove this request's response, when
+	// one was resolved (via X-TestPay-Scenario-ID header, active session, or
+	// workspace default). Nil when the fallback "always succeed" scenario
+	// fired.
+	ScenarioID      *string           `json:"scenario_id,omitempty"`
+	// MerchantOrderID is the caller's reference pulled from the request body
+	// (order_id / merchant_order_id / metadata.order_id / notes.reference).
+	// Empty string when the payload didn't include one.
+	MerchantOrderID string            `json:"merchant_order_id"`
 	Gateway         string            `json:"gateway"`
 	Method          string            `json:"method"`
 	Path            string            `json:"path"`
