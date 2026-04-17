@@ -47,7 +47,9 @@ Thumbs.db
 .superpowers/
 
 # ── Docs (internal specs/plans — not for public repo) ────────────────────────
-docs/
+# Scoped to the repo-root docs/ only; the public in-app docs section lives at
+# web/app/docs/ and MUST ship.
+/docs/
 
 # ── Local scripts (personal load/matrix helpers, not for public repo) ────────
 scripts/
