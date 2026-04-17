@@ -49,5 +49,8 @@ Thumbs.db
 # ── Docs (internal specs/plans — not for public repo) ────────────────────────
 docs/
 
+# ── Local scripts (personal load/matrix helpers, not for public repo) ────────
+scripts/
+
 # ── Docker volumes ───────────────────────────────────────────────────────────
 pgdata/
