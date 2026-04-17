@@ -98,6 +98,23 @@ export function useWebhook(id: string | null) {
   return useSWR<WebhookLog>(id ? `/api/webhooks/${id}` : null, swrFetcher);
 }
 
+// Gateways whose adapter is currently a stub (generic response shape). Hide
+// them from dropdowns so pilot users don't pick one and get confusing output
+// — but keep them registered on the backend (ad-hoc curls still work).
+const STUB_GATEWAYS = new Set(['epay', 'omise', 'payletter']);
+
 export function useGateways() {
+  const res = useSWR<string[]>('/api/gateways', swrFetcher, { revalidateOnFocus: false });
+  // Wrap the SWR response to filter out stubs. Consumers that need the raw
+  // list can call useAllGateways() below.
+  return {
+    ...res,
+    data: res.data?.filter((g) => !STUB_GATEWAYS.has(g)),
+  };
+}
+
+// Raw gateway list including stubs — for the docs page that explicitly
+// enumerates every adapter.
+export function useAllGateways() {
   return useSWR<string[]>('/api/gateways', swrFetcher, { revalidateOnFocus: false });
 }

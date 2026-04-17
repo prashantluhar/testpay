@@ -2,6 +2,7 @@
 import { usePathname } from 'next/navigation';
 import { Badge } from '@radix-ui/themes';
 import { CopyButton } from '@/components/common/copy-button';
+import { FeedbackButton } from '@/components/common/feedback-button';
 import { MODE } from '@/lib/types';
 import { UserMenu } from './user-menu';
 import type { User } from '@/lib/types';
@@ -23,6 +24,7 @@ export function Topbar({ user }: { user: User }) {
         <span className="font-mono text-xs text-muted-foreground hidden lg:inline">{baseUrl}</span>
         <CopyButton value={baseUrl} label="" />
         <div className="h-6 w-px bg-border" />
+        <FeedbackButton />
         <UserMenu user={user} />
       </div>
     </header>

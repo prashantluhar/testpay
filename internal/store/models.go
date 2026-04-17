@@ -57,6 +57,21 @@ type Session struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// Feedback is an in-app user submission. Public endpoint, so all identity
+// fields are nullable — anonymous docs visitors can submit too.
+type Feedback struct {
+	ID          string    `json:"id"`
+	WorkspaceID *string   `json:"workspace_id,omitempty"`
+	UserID      *string   `json:"user_id,omitempty"`
+	WhatTried   string    `json:"what_tried"`
+	Worked      string    `json:"worked"`
+	Missing     string    `json:"missing"`
+	Email       string    `json:"email"`
+	UserAgent   string    `json:"user_agent"`
+	PageURL     string    `json:"page_url"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type AttemptLog struct {
 	Status      int    `json:"status"`
 	DurationMs  int    `json:"duration_ms"`

@@ -451,6 +451,18 @@ curl -X POST "$API/stripe/v1/charges" \
 
 The mock charge should appear on the dashboard's `/logs` page.
 
+### Keep the hosted instance warm
+
+Render free web services sleep after 15 min of inactivity. Every cold start costs ~30-60 s while the container boots + Neon's compute un-suspends. For a demo URL, that's ugly.
+
+Fix: set up a 5-minute uptime ping against **`/healthz`** (unauthenticated liveness endpoint). Any free pinger works:
+
+- **UptimeRobot** — [uptimerobot.com](https://uptimerobot.com), free plan allows 50 monitors at 5-min intervals. Monitor type: HTTP(s). URL: `https://testpay-przk.onrender.com/healthz`. Expected: 200 OK.
+- **cron-job.org** — similar, slightly simpler UI.
+- **GitHub Actions** — `schedule: cron: '*/5 * * * *'` running a single `curl` step. Free for public repos.
+
+`/healthz` is side-effect-free (no DB work, no logs written) so continuous pinging doesn't pollute your request_logs or burn Neon compute hours. `/api/gateways` and other `/api/*` routes require session cookies — don't ping those, they'll return 401.
+
 ### Free-tier quirks to expect
 
 - **Cold start — first request after 15 min idle is slow.** `testpay-api` sleeps on Render free tier; waking from sleep takes ~30-60 seconds (Docker image unpack, Go binary boot, Neon DB wake all stack up). If you haven't hit the service in a while, expect the first `curl` / page load to hang for up to a minute. Every subsequent request until the next idle window is fast. You can keep it warm with an external uptime pinger (e.g. Uptime Kuma, cron-job.org) at your own quota expense.

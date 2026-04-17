@@ -35,6 +35,16 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 	r.Use(middleware.GatewayResolver)
 	r.Use(middleware.Session(cfg.Auth.JWTSecret, cfg.Server.Mode))
 
+	// Public health endpoint — unauthenticated, side-effect-free, cheap.
+	// Used by uptime-ping services to keep the free-tier Render instance
+	// warm (first call after 15 min idle costs ~30-60 s; pinging /healthz
+	// every 5 min avoids that).
+	r.Get("/healthz", handlers.Healthz())
+
+	// Feedback endpoint — public so visitors on /docs can submit too.
+	// Session context (if present) enriches the row with user/workspace ids.
+	r.Post("/api/feedback", handlers.Feedback(s))
+
 	// Mock gateway endpoints — one /{gateway}/* route per registered adapter.
 	// The handler uses the original URL path to resolve the gateway; don't
 	// strip the prefix. The mock handler itself enforces workspace auth via

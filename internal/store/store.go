@@ -49,6 +49,9 @@ type Store interface {
 	GetWebhookLog(ctx context.Context, id string) (*WebhookLog, error)
 	ListWebhookLogs(ctx context.Context, workspaceID string, limit, offset int) ([]*WebhookLog, error)
 
+	// Feedback
+	CreateFeedback(ctx context.Context, f *Feedback) error
+
 	// Users
 	CreateUser(ctx context.Context, u *User, passwordHash string) error
 	GetUserByEmail(ctx context.Context, email string) (*User, string, error)

@@ -502,6 +502,20 @@ func (s *Store) ListWebhookLogs(ctx context.Context, workspaceID string, limit, 
 	return out, rows.Err()
 }
 
+// ── Feedback ─────────────────────────────────────────────────────────────────
+
+func (s *Store) CreateFeedback(ctx context.Context, f *store.Feedback) error {
+	start := time.Now()
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO feedback_submissions
+		 (id, workspace_id, user_id, what_tried, worked, missing, email, user_agent, page_url)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		f.ID, f.WorkspaceID, f.UserID, f.WhatTried, f.Worked, f.Missing, f.Email, f.UserAgent, f.PageURL,
+	)
+	logSlow(ctx, "CreateFeedback", start, err)
+	return err
+}
+
 // ── Users ────────────────────────────────────────────────────────────────────
 
 func (s *Store) CreateUser(ctx context.Context, u *store.User, passwordHash string) error {

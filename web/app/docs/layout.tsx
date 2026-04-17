@@ -4,6 +4,7 @@ import { LightningBoltIcon, PersonIcon } from '@radix-ui/react-icons';
 import { DocsSidebar } from '@/components/docs/docs-sidebar';
 import { OnThisPage } from '@/components/docs/on-this-page';
 import { HelpfulPanel } from '@/components/docs/helpful-panel';
+import { FeedbackButton } from '@/components/common/feedback-button';
 
 // Docs live at a PUBLIC route (not nested under (dashboard)) so any visitor
 // — including someone on /signup or /login — can link to the same pages
@@ -25,7 +26,8 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             TestPay <span className="font-normal text-[var(--gray-11)]">docs</span>
           </Heading>
         </Link>
-        <Flex gap="4" align="center" className="text-sm">
+        <Flex gap="3" align="center" className="text-sm">
+          <FeedbackButton compact />
           <Link
             href="/login"
             className="text-[var(--gray-11)] hover:text-[var(--gray-12)] transition-colors"

@@ -263,6 +263,7 @@ func (f *fakeStore) BumpSessionCallIndex(_ context.Context, sessionID string) (i
 	sess.CallIndex++
 	return pre, nil
 }
+func (f *fakeStore) CreateFeedback(_ context.Context, _ *store.Feedback) error { return nil }
 
 // Request logs -----------------------------------------------------------
 
