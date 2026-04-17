@@ -43,6 +43,9 @@ TestPay gives you a mock gateway that behaves exactly like Stripe, Razorpay, or 
 - **Zero code change** — point your Stripe SDK at `localhost:7700/stripe` and it just works
 - **Gateway-agnostic engine** — Stripe, Razorpay, and a generic "agnostic" adapter today; more coming
 - **Embedded dashboard** — `./testpay start` serves both the API (`:7700`) and the dashboard (`:7701`) from one binary
+- **One-shot failure simulation** — drop an `X-TestPay-Outcome: <mode>` header on any mock request to fire that exact failure without creating a scenario first
+- **Sequential scenario replay** — multi-step scenarios now advance across successive SDK calls (call 1 → step 0, call 2 → step 1, …) via a per-session counter
+- **Public docs** — `/docs` is accessible without an account: getting started, per-adapter response + webhook shapes, failure-modes reference, full API reference
 
 ---
 
@@ -139,6 +142,29 @@ YOUR_GATEWAY_BASE_URL=http://localhost:7700/v1
 ```
 
 All requests are logged to Postgres and surfaced in the dashboard's **Logs** page.
+
+### Simulate a specific failure on any request
+
+Drop the `X-TestPay-Outcome` header to force a single failure mode without setting up a scenario:
+
+```bash
+curl -X POST http://localhost:7700/stripe/v1/charges \
+  -H "Authorization: Bearer $WORKSPACE_API_KEY" \
+  -H "X-TestPay-Outcome: bank_do_not_honour" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":5000,"currency":"usd"}'
+# → HTTP 402 with Stripe-shaped error envelope
+```
+
+Any of the 28 failure modes works as the header value. Unknown values silently fall through to success (logged server-side). See `/docs/failure-modes` for the full list.
+
+**Priority order when multiple sources are configured** (highest wins):
+
+1. `X-TestPay-Outcome: <mode>` header — single-step, no scenario needed
+2. `X-TestPay-Scenario-ID: <scenario_id>` header — per-request scenario override
+3. Active session (`POST /api/sessions`) — multi-step scenarios advance across calls
+4. Workspace default scenario — sticky until changed
+5. Built-in "always succeed" fallback
 
 ---
 

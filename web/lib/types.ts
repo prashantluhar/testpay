@@ -52,6 +52,8 @@ export interface RequestLog {
   id: string;
   workspace_id: string;
   scenario_run_id?: string;
+  scenario_id?: string;
+  merchant_order_id: string;
   gateway: string;
   method: string;
   path: string;

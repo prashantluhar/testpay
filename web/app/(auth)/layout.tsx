@@ -1,5 +1,6 @@
+import Link from 'next/link';
 import { Box, Flex, Heading, Text, Badge } from '@radix-ui/themes';
-import { LightningBoltIcon } from '@radix-ui/react-icons';
+import { LightningBoltIcon, ReaderIcon } from '@radix-ui/react-icons';
 import { AuthFormTransition } from '@/components/auth/auth-form-transition';
 
 // Split-screen auth layout.
@@ -9,7 +10,16 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen w-full grid md:grid-cols-2">
       {/* Left: form column — child slides in/out directionally on navigation. */}
-      <div className="flex items-center justify-center p-6 md:p-10">
+      <div className="relative flex items-center justify-center p-6 md:p-10">
+        {/* Public Docs link — gives visitors a way to read about the product
+            before committing to signup. */}
+        <Link
+          href="/docs/about"
+          className="absolute top-4 right-4 md:top-6 md:right-6 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--gray-11)] hover:text-[var(--gray-12)] hover:bg-[var(--gray-a3)] transition-colors"
+        >
+          <ReaderIcon width="14" height="14" />
+          Docs
+        </Link>
         <AuthFormTransition>{children}</AuthFormTransition>
       </div>
 

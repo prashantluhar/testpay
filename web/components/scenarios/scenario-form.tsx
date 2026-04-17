@@ -19,12 +19,14 @@ import { JsonViewer } from '@/components/common/json-viewer';
 import { CopyButton } from '@/components/common/copy-button';
 import { scenarioSchema, type ScenarioInput } from '@/lib/schemas';
 import { api } from '@/lib/api';
+import { useGateways } from '@/lib/hooks';
 import type { Scenario } from '@/lib/types';
 import { mutate } from 'swr';
 
 export function ScenarioForm({ initial }: { initial?: Scenario }) {
   const router = useRouter();
   const isEdit = !!initial;
+  const { data: gateways = [] } = useGateways();
 
   const form = useForm<ScenarioInput>({
     resolver: zodResolver(scenarioSchema),
@@ -100,9 +102,17 @@ export function ScenarioForm({ initial }: { initial?: Scenario }) {
                   <Select.Root value={field.value} onValueChange={field.onChange}>
                     <Select.Trigger className="mt-1 w-full" />
                     <Select.Content>
-                      <Select.Item value="stripe">stripe</Select.Item>
-                      <Select.Item value="razorpay">razorpay</Select.Item>
-                      <Select.Item value="agnostic">agnostic</Select.Item>
+                      {gateways.length === 0 ? (
+                        <Select.Item value={field.value || 'stripe'}>
+                          Loading…
+                        </Select.Item>
+                      ) : (
+                        gateways.map((g) => (
+                          <Select.Item key={g} value={g}>
+                            {g}
+                          </Select.Item>
+                        ))
+                      )}
                     </Select.Content>
                   </Select.Root>
                 )}

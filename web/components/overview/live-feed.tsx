@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useLogs } from '@/lib/hooks';
 import { StatusChip } from '@/components/common/status-chip';
 import { GatewayBadge } from '@/components/common/gateway-badge';
@@ -69,25 +70,32 @@ export function LiveFeed() {
     <div className="divide-y">
       {data.map((l) => {
         const isNew = highlighted.has(l.id);
+        const shortId = l.id.slice(0, 8);
         return (
-          <div
+          <Link
             key={l.id}
-            className={`px-4 py-2 flex items-center gap-3 text-sm font-mono transition-colors ${
+            href={`/logs?id=${l.id}`}
+            prefetch={false}
+            className={`px-4 py-2 flex items-center gap-3 text-sm font-mono transition-colors hover:bg-[var(--gray-a3)] ${
               isNew
                 ? 'animate-in fade-in slide-in-from-top-1 duration-300 bg-[var(--accent-4)]'
                 : 'bg-transparent'
             }`}
             style={isNew ? { transition: 'background-color 1s ease-out' } : undefined}
+            title={l.id}
           >
+            <span className="text-[var(--gray-10)] text-xs tabular-nums w-[70px] shrink-0">
+              {shortId}
+            </span>
             <StatusChip status={l.response_status} />
-            <span className="text-muted-foreground w-14">{l.method}</span>
+            <span className="text-muted-foreground w-14 shrink-0">{l.method}</span>
             <GatewayBadge gateway={l.gateway} />
             <span className="flex-1 truncate">{l.path}</span>
             <span className="text-muted-foreground text-xs">{l.duration_ms}ms</span>
             <span className="text-muted-foreground text-xs">
               {new Date(l.created_at).toLocaleTimeString()}
             </span>
-          </div>
+          </Link>
         );
       })}
     </div>

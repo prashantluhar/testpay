@@ -65,6 +65,12 @@ export default function OverviewPage() {
           </span>
           <code className="flex-1 truncate font-mono text-sm">{baseUrl}</code>
           <CopyButton value={baseUrl} label="" />
+          <Link
+            href="/docs"
+            className="text-xs text-muted-foreground hover:text-foreground underline shrink-0 ml-1"
+          >
+            Read the docs →
+          </Link>
         </div>
 
         {/* Gateway chips — click to copy full URL */}
