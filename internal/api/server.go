@@ -34,19 +34,20 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 	r.Use(middleware.Logger(cfg.Environment, "testpay"))
 	r.Use(middleware.GatewayResolver)
 	r.Use(middleware.Session(cfg.Auth.JWTSecret, cfg.Server.Mode))
-	r.Use(middleware.Auth(cfg.Server.Mode, cfg.Auth.APIKey))
 
 	// Mock gateway endpoints — one /{gateway}/* route per registered adapter.
 	// The handler uses the original URL path to resolve the gateway; don't
-	// strip the prefix.
+	// strip the prefix. Auth (api_key bearer) only gates mock routes — /api/*
+	// uses session auth and /api/auth/* stays public so signup/login work.
 	mockHandler := handlers.NewMock(eng, reg, s, dispatcher)
+	mockAuth := middleware.Auth(cfg.Server.Mode, cfg.Auth.APIKey)
 	for _, g := range reg.KnownGateways() {
 		if g == "agnostic" {
 			continue // agnostic is reached via /v1/*
 		}
-		r.Handle("/"+g+"/*", mockHandler)
+		r.With(mockAuth).Handle("/"+g+"/*", mockHandler)
 	}
-	r.Handle("/v1/*", mockHandler)
+	r.With(mockAuth).Handle("/v1/*", mockHandler)
 
 	// Control API — /api/auth/* stays open; everything else requires a session.
 	r.Route("/api", func(r chi.Router) {
