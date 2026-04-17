@@ -6,11 +6,12 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/prashantluhar/testpay.svg)](https://pkg.go.dev/github.com/prashantluhar/testpay)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/prashantluhar/testpay?logo=go)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/prashantluhar/testpay?logo=github)](https://github.com/prashantluhar/testpay/releases)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://github.com/prashantluhar/testpay/pkgs/container/testpay)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 **Postman for Payments.** A mock payment gateway and failure-simulation tool that lets developers test every real-world payment edge case — locally and in CI — without touching production systems.
+
+**Live demo** — [dashboard](https://testpay-web.onrender.com) · [API](https://testpay-przk.onrender.com) (Render free tier; first request after idle is slow, see [Free-tier quirks](#free-tier-quirks-to-expect)).
 
 ---
 
@@ -391,10 +392,24 @@ The mock charge should appear on the dashboard's `/logs` page.
 
 ### Free-tier quirks to expect
 
-- **First request after 15 min idle is slow** — `testpay-api` sleeps on Render free; expect ~30-60 s to wake. Subsequent requests are fast until the next idle window.
-- **Neon suspends after ~5 min** — adds ~500 ms to the first DB query after idle. Negligible after that.
-- **Neon storage cap: 0.5 GB** — plenty for demo traffic. The `request_logs` table is the heaviest; truncate periodically if you stress-test.
-- **One Render free web service** — if the binary crashes you'll get 502s until the next deploy. Push a fix and it auto-redeploys.
+- **Cold start — first request after 15 min idle is slow.** `testpay-api` sleeps on Render free tier; waking from sleep takes ~30-60 seconds (Docker image unpack, Go binary boot, Neon DB wake all stack up). If you haven't hit the service in a while, expect the first `curl` / page load to hang for up to a minute. Every subsequent request until the next idle window is fast. You can keep it warm with an external uptime pinger (e.g. Uptime Kuma, cron-job.org) at your own quota expense.
+- **Neon auto-suspends after ~5 min idle.** Adds ~500 ms to the first DB query after a suspend. Negligible after that.
+- **Neon storage cap: 0.5 GB.** Plenty for demo traffic. The `request_logs` table is the heaviest; if you stress-test, manually `TRUNCATE request_logs, webhook_logs;` via the Neon SQL editor to reclaim space.
+- **One Render free web service.** If the binary crashes you'll get 502s until the next deploy. Push a fix and it auto-redeploys.
+
+### Abuse protection (enforced server-side)
+
+Because the demo runs on shared free-tier resources, the binary rate-limits itself so a noisy caller can't burn the monthly quota for everyone:
+
+| Scope | Limit | What happens when exceeded |
+|---|---|---|
+| **Mock endpoints, per-IP** | 30 requests / minute (burst 10) | `HTTP 429`, `Retry-After: 60` header |
+| **Mock endpoints, global** | 150 requests / minute combined | `HTTP 429` |
+| **Signup / login, per-IP** | 10 requests / minute (burst 3) | `HTTP 429` |
+| **Workspace API key required** | mock routes reject any call without a valid workspace `Authorization: Bearer <api_key>` | `HTTP 401` |
+| **Session auth on `/api/*`** | dashboard routes require a valid JWT cookie | `HTTP 401 login required` |
+
+All numbers live in `deploy/config/testpay.render.yaml` (`rate_limit` block) and are enforced by `internal/api/middleware/ratelimit.go` using an in-memory token-bucket keyed by client IP (with `X-Forwarded-For` resolution since Render terminates TLS at its proxy). Self-hosted? Bump the numbers in your own config — the middleware is limit-agnostic.
 
 ---
 

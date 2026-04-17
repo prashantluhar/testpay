@@ -29,4 +29,7 @@ cors:
 cloud:
   provider: none
 
-rate_limit: { requests_per_minute: 300, burst: 50 }
+# Tight free-tier caps. Per-IP only on the direct bucket; the server also
+# enforces a global cap of 5x this value across all IPs combined. Bump both
+# if you ever upgrade off free tier.
+rate_limit: { requests_per_minute: 30, burst: 10 }

@@ -39,20 +39,30 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 	// The handler uses the original URL path to resolve the gateway; don't
 	// strip the prefix. The mock handler itself enforces workspace auth via
 	// Bearer api_key in hosted mode, so no extra middleware is needed here.
+	// Rate limiting applies to mock endpoints (main traffic source) so
+	// abusive callers can't blow through the free-tier hosting quota.
 	mockHandler := handlers.NewMockWithMode(eng, reg, s, dispatcher, cfg.Server.Mode)
+	perMin := cfg.RateLimit.RequestsPerMinute
+	burst := cfg.RateLimit.Burst
+	globalCap := perMin * 5 // cap all clients combined at 5× single-client rate
+	mockLimiter := middleware.NewRateLimiter(perMin, burst, globalCap).Middleware
 	for _, g := range reg.KnownGateways() {
 		if g == "agnostic" {
 			continue // agnostic is reached via /v1/*
 		}
-		r.Handle("/"+g+"/*", mockHandler)
+		r.With(mockLimiter).Handle("/"+g+"/*", mockHandler)
 	}
-	r.Handle("/v1/*", mockHandler)
+	r.With(mockLimiter).Handle("/v1/*", mockHandler)
+
+	// Signup/login are also common abuse targets — narrower limiter, per-IP
+	// only (no global bucket, since legitimate signup traffic is low).
+	authLimiter := middleware.NewRateLimiter(10, 3, 0).Middleware
 
 	// Control API — /api/auth/* stays open; everything else requires a session.
 	r.Route("/api", func(r chi.Router) {
 		// Public auth routes.
-		r.Post("/auth/signup", handlers.Signup(s, cfg.Auth.JWTSecret, cfg.Server.Mode))
-		r.Post("/auth/login", handlers.Login(s, cfg.Auth.JWTSecret, cfg.Server.Mode))
+		r.With(authLimiter).Post("/auth/signup", handlers.Signup(s, cfg.Auth.JWTSecret, cfg.Server.Mode))
+		r.With(authLimiter).Post("/auth/login", handlers.Login(s, cfg.Auth.JWTSecret, cfg.Server.Mode))
 		r.Post("/auth/logout", handlers.Logout(cfg.Server.Mode))
 		r.Get("/auth/me", handlers.Me(s))
 
