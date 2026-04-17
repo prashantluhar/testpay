@@ -2,13 +2,17 @@ import Link from 'next/link';
 import { Flex, Heading } from '@radix-ui/themes';
 import { LightningBoltIcon, PersonIcon } from '@radix-ui/react-icons';
 import { DocsSidebar } from '@/components/docs/docs-sidebar';
+import { OnThisPage } from '@/components/docs/on-this-page';
+import { HelpfulPanel } from '@/components/docs/helpful-panel';
 
 // Docs live at a PUBLIC route (not nested under (dashboard)) so any visitor
 // — including someone on /signup or /login — can link to the same pages
 // without needing an account.
 //
-// Two-column shell: left sticky TOC, right the active page. A minimal top
-// bar brands the section and gives an easy way back to the app.
+// Three-column shell: left TOC (DocsSidebar), center content, right rail
+// (OnThisPage scroll-spy + HelpfulPanel). The right rail hides below xl so
+// narrower screens aren't cramped. A minimal top bar brands the section
+// and gives an easy way back to the app.
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[var(--color-background)]">
@@ -37,9 +41,13 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           </Link>
         </Flex>
       </header>
-      <div className="flex gap-6 px-6 py-6">
+      <div className="mx-auto max-w-[1400px] flex gap-6 px-6 py-6">
         <DocsSidebar />
-        <div className="flex-1 min-w-0 max-w-3xl pl-2 py-2">{children}</div>
+        <main className="flex-1 min-w-0 max-w-3xl pl-2 py-2">{children}</main>
+        <aside className="hidden xl:block w-60 shrink-0 sticky top-20 self-start h-[calc(100vh-6rem)] overflow-y-auto pl-4 border-l border-[var(--gray-a5)] space-y-6">
+          <OnThisPage containerSelector="main" />
+          <HelpfulPanel />
+        </aside>
       </div>
     </div>
   );
