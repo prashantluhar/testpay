@@ -5,6 +5,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Box, Button, Flex, Heading, Text, TextField } from '@radix-ui/themes';
+import { ArrowRightIcon } from '@radix-ui/react-icons';
+import { Spinner } from '@/components/common/spinner';
 import { loginSchema, type LoginInput } from '@/lib/schemas';
 import { api, ApiError } from '@/lib/api';
 
@@ -74,13 +76,19 @@ export default function LoginPage() {
             size="3"
             disabled={form.formState.isSubmitting}
             loading={form.formState.isSubmitting}
+            className="transition-transform hover:-translate-y-px"
           >
+            {form.formState.isSubmitting && <Spinner size="small" />}
             {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
           </Button>
           <Text size="2" color="gray" align="center">
             No account?{' '}
-            <Link href="/signup" className="underline text-[var(--accent-11)]">
+            <Link
+              href="/signup"
+              className="group inline-flex items-center gap-1 font-medium text-[var(--accent-11)] transition-colors hover:text-[var(--accent-12)]"
+            >
               Create one
+              <ArrowRightIcon className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" />
             </Link>
           </Text>
         </Flex>

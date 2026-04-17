@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Button, Flex, Heading, Table, Text } from '@radix-ui/themes';
 import { GatewayBadge } from '@/components/common/gateway-badge';
 import { ConfirmModal } from '@/components/common/confirm-modal';
+import { TableSkeleton } from '@/components/common/table-skeleton';
 import { useScenarios } from '@/lib/hooks';
 import { api, ApiError } from '@/lib/api';
 import { mutate } from 'swr';
@@ -66,7 +67,7 @@ export default function ScenariosPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-300">
       <Flex align="center" justify="between">
         <div>
           <Heading size="6">Scenarios</Heading>
@@ -100,9 +101,12 @@ export default function ScenariosPage() {
               <Table.ColumnHeaderCell className="text-right">Actions</Table.ColumnHeaderCell>
             </Table.Row>
           </Table.Header>
+          {data === undefined ? (
+            <TableSkeleton rows={6} columns={5} />
+          ) : (
           <Table.Body>
             {data?.map((s) => (
-              <Table.Row key={s.id}>
+              <Table.Row key={s.id} className="animate-in fade-in duration-200">
                 <Table.Cell className="font-medium">{s.name}</Table.Cell>
                 <Table.Cell>
                   <GatewayBadge gateway={s.gateway} />
@@ -160,6 +164,7 @@ export default function ScenariosPage() {
               </Table.Row>
             )}
           </Table.Body>
+          )}
         </Table.Root>
       </div>
 

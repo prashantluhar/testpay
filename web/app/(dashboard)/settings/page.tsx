@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  InfoCircledIcon,
   CheckCircledIcon,
 } from '@radix-ui/react-icons';
 import { Box, Button, Card, Flex, Heading, Text, TextField } from '@radix-ui/themes';
@@ -11,7 +10,10 @@ import { toast } from 'sonner';
 import { useMe, useGateways } from '@/lib/hooks';
 import { ApiKeyReveal } from '@/components/common/api-key-reveal';
 import { useTheme } from '@/components/common/theme-provider';
+import { useThemePreset } from '@/components/common/theme-preset-provider';
 import { CopyButton } from '@/components/common/copy-button';
+import { Spinner } from '@/components/common/spinner';
+import { THEME_PRESETS } from '@/lib/themes';
 import { MODE } from '@/lib/types';
 import { api, ApiError } from '@/lib/api';
 import { mutate } from 'swr';
@@ -24,6 +26,7 @@ export default function SettingsPage() {
   const { data: me } = useMe();
   const { data: gateways = [] } = useGateways();
   const { theme, setTheme } = useTheme();
+  const { presetId, setPresetId } = useThemePreset();
 
   const [defaultUrl, setDefaultUrl] = useState('');
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -75,7 +78,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-3xl space-y-6 animate-in fade-in duration-300">
       <Heading size="6">Settings</Heading>
 
       <Card>
@@ -163,7 +166,7 @@ export default function SettingsPage() {
                 <div className="mt-3 space-y-2">
                   {gateways.length === 0 ? (
                     <div className="text-xs text-muted-foreground flex items-center gap-2">
-                      <InfoCircledIcon className="h-3.5 w-3.5" />
+                      <Spinner size="small" />
                       Loading gateway list…
                     </div>
                   ) : (
@@ -182,7 +185,12 @@ export default function SettingsPage() {
             </div>
 
             <Flex gap="2" pt="2" className="border-t">
-              <Button onClick={saveWebhooks} disabled={saving}>
+              <Button
+                onClick={saveWebhooks}
+                disabled={saving}
+                loading={saving}
+                className="transition-transform hover:-translate-y-px"
+              >
                 {saving ? 'Saving…' : 'Save'}
               </Button>
               <Button
@@ -210,17 +218,70 @@ export default function SettingsPage() {
           <Heading size="3" mb="3">
             Appearance
           </Heading>
-          <Flex gap="2">
-            {(['light', 'dark', 'system'] as const).map((t) => (
-              <Button
-                key={t}
-                variant={theme === t ? 'solid' : 'outline'}
-                size="2"
-                onClick={() => setTheme(t)}
-              >
-                {t}
-              </Button>
-            ))}
+          <Flex direction="column" gap="5">
+            <div>
+              <Text size="2" weight="medium" as="div" mb="2">
+                Mode
+              </Text>
+              <Flex gap="2">
+                {(['light', 'dark', 'system'] as const).map((t) => (
+                  <Button
+                    key={t}
+                    variant={theme === t ? 'solid' : 'outline'}
+                    size="2"
+                    onClick={() => setTheme(t)}
+                  >
+                    {t}
+                  </Button>
+                ))}
+              </Flex>
+            </div>
+
+            <div>
+              <Text size="2" weight="medium" as="div" mb="2">
+                Color theme
+              </Text>
+              <Text size="1" color="gray" as="p" mb="3">
+                Pick an accent + gray palette. Applies instantly and is saved to
+                this browser.
+              </Text>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                {THEME_PRESETS.map((p) => {
+                  const active = presetId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPresetId(p.id)}
+                      className="text-left rounded-md border bg-card p-3 transition-all hover:-translate-y-px hover:border-[var(--accent-8)]"
+                      style={
+                        active
+                          ? { boxShadow: 'inset 0 0 0 2px var(--accent-9)' }
+                          : undefined
+                      }
+                      aria-pressed={active}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span
+                          className="h-4 w-4 rounded-full border border-black/10 dark:border-white/10"
+                          style={{ background: `var(--${p.accentColor}-9)` }}
+                        />
+                        <span
+                          className="h-4 w-4 rounded-full border border-black/10 dark:border-white/10"
+                          style={{ background: `var(--${p.grayColor}-9)` }}
+                        />
+                        <Text size="2" weight="medium">
+                          {p.name}
+                        </Text>
+                      </div>
+                      <Text size="1" color="gray" as="div">
+                        {p.description}
+                      </Text>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </Flex>
         </Box>
       </Card>

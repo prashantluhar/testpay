@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google';
 import '@radix-ui/themes/styles.css';
 import './globals.css';
 import { ThemeProvider } from '@/components/common/theme-provider';
+import { ThemePresetProvider } from '@/components/common/theme-preset-provider';
 import { ThemeWrapper } from '@/components/common/theme-wrapper';
 import { Toaster } from 'sonner';
 
@@ -19,7 +20,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${inter.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="bg-background text-foreground antialiased">
         <ThemeProvider>
-          <ThemeWrapper>{children}</ThemeWrapper>
+          <ThemePresetProvider>
+            <ThemeWrapper>{children}</ThemeWrapper>
+          </ThemePresetProvider>
         </ThemeProvider>
         <Toaster richColors position="top-right" />
       </body>

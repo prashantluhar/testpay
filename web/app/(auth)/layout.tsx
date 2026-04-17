@@ -1,5 +1,6 @@
 import { Box, Flex, Heading, Text, Badge } from '@radix-ui/themes';
 import { LightningBoltIcon } from '@radix-ui/react-icons';
+import { AuthFormTransition } from '@/components/auth/auth-form-transition';
 
 // Split-screen auth layout.
 // - Below md: form takes the full screen.
@@ -7,9 +8,9 @@ import { LightningBoltIcon } from '@radix-ui/react-icons';
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen w-full grid md:grid-cols-2">
-      {/* Left: form column */}
+      {/* Left: form column — child slides in/out directionally on navigation. */}
       <div className="flex items-center justify-center p-6 md:p-10">
-        <div className="w-full max-w-sm">{children}</div>
+        <AuthFormTransition>{children}</AuthFormTransition>
       </div>
 
       {/* Right: product showcase (hidden below md) */}

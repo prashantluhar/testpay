@@ -6,6 +6,7 @@ import { LiveFeed } from '@/components/overview/live-feed';
 import { useLogs, useScenarios, useWebhooks, useGateways } from '@/lib/hooks';
 import { MODE } from '@/lib/types';
 import { CopyButton } from '@/components/common/copy-button';
+import { Spinner } from '@/components/common/spinner';
 import Link from 'next/link';
 import { ListBulletIcon, PaperPlaneIcon, FileTextIcon } from '@radix-ui/react-icons';
 
@@ -33,7 +34,7 @@ export default function OverviewPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-300">
       {/* Hero: workspace endpoints */}
       <div className="rounded-xl border bg-gradient-to-br from-card to-accent/30 p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -69,7 +70,10 @@ export default function OverviewPage() {
         {/* Gateway chips — click to copy full URL */}
         <div className="mt-3 flex flex-wrap gap-1.5">
           {gateways.length === 0 ? (
-            <span className="text-xs text-muted-foreground">Loading gateways…</span>
+            <span className="text-xs text-muted-foreground inline-flex items-center gap-2">
+              <Spinner size="small" />
+              Loading gateways…
+            </span>
           ) : (
             gateways.map((g) => {
               const active = copiedGateway === g;

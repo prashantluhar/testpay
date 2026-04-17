@@ -13,6 +13,7 @@ export default function LogsPage() {
   });
   const [selected, setSelected] = useState<string | null>(null);
   const { data } = useLogs({ limit: 200 });
+  const loading = data === undefined;
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -30,8 +31,10 @@ export default function LogsPage() {
     });
   }, [data, filters]);
 
+  const filterKey = `${filters.gateway}|${filters.statusClass}|${filters.search}`;
+
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-[calc(100vh-8rem)] animate-in fade-in duration-300">
       <div className="flex items-end justify-between mb-3 shrink-0">
         <h1 className="text-2xl font-semibold">Logs</h1>
         <span className="text-xs text-muted-foreground">{rows.length} shown</span>
@@ -40,7 +43,12 @@ export default function LogsPage() {
         <LogFilters value={filters} onChange={setFilters} />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto border rounded-md">
-        <LogsTable rows={rows} onSelect={setSelected} />
+        <LogsTable
+          rows={rows}
+          onSelect={setSelected}
+          loading={loading}
+          filterKey={filterKey}
+        />
       </div>
       <LogDetailDrawer id={selected} onClose={() => setSelected(null)} />
     </div>

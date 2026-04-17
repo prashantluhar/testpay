@@ -57,6 +57,7 @@ type AttemptLog struct {
 	Status      int    `json:"status"`
 	DurationMs  int    `json:"duration_ms"`
 	Response    string `json:"response"`
+	Error       string `json:"error,omitempty"`
 	AttemptedAt string `json:"attempted_at"`
 }
 

@@ -2,11 +2,14 @@
 import { useEffect, useState } from 'react';
 import { Theme } from '@radix-ui/themes';
 import { useTheme } from './theme-provider';
+import { useThemePreset } from './theme-preset-provider';
 
 // Bridges the existing `ThemeProvider` (which toggles `.dark` on <html>)
-// into Radix Themes by passing the resolved appearance to <Theme>.
+// and the `ThemePresetProvider` (which holds the selected color preset)
+// into Radix Themes by passing the resolved props to <Theme>.
 export function ThemeWrapper({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
+  const { preset } = useThemePreset();
   const [resolved, setResolved] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
@@ -23,10 +26,10 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
   return (
     <Theme
       appearance={resolved}
-      accentColor="indigo"
-      grayColor="slate"
-      radius="medium"
-      panelBackground="solid"
+      accentColor={preset.accentColor}
+      grayColor={preset.grayColor}
+      radius={preset.radius}
+      panelBackground={preset.panelBackground}
     >
       {children}
     </Theme>

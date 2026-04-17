@@ -1,7 +1,9 @@
 'use client';
+import { useEffect, useRef, useState } from 'react';
 import { Table } from '@radix-ui/themes';
 import { StatusChip } from '@/components/common/status-chip';
 import { GatewayBadge } from '@/components/common/gateway-badge';
+import { TableSkeleton } from '@/components/common/table-skeleton';
 import type { RequestLog } from '@/lib/types';
 
 // Short relative-time like "4s", "2m", "1h", else an absolute short timestamp.
@@ -17,10 +19,26 @@ function shortTime(iso: string) {
 export function LogsTable({
   rows,
   onSelect,
+  loading = false,
+  filterKey,
 }: {
   rows: RequestLog[];
   onSelect: (id: string) => void;
+  loading?: boolean;
+  // Changing this value re-keys the table body so the rows replay their
+  // fade-in animation — used by the logs page when filters change.
+  filterKey?: string;
 }) {
+  // Bump a nonce whenever the filter signature changes so row animations replay.
+  const [nonce, setNonce] = useState(0);
+  const lastKeyRef = useRef<string | undefined>(filterKey);
+  useEffect(() => {
+    if (filterKey !== lastKeyRef.current) {
+      lastKeyRef.current = filterKey;
+      setNonce((n) => n + 1);
+    }
+  }, [filterKey]);
+
   return (
     <Table.Root size="1">
       <Table.Header className="sticky top-0 bg-card/95 backdrop-blur z-10">
@@ -45,40 +63,46 @@ export function LogsTable({
           </Table.ColumnHeaderCell>
         </Table.Row>
       </Table.Header>
-      <Table.Body>
-        {rows.map((l) => (
-          <Table.Row
-            key={l.id}
-            className="row-accent cursor-pointer font-mono text-xs transition-colors"
-            onClick={() => onSelect(l.id)}
-          >
-            <Table.Cell className="text-muted-foreground">
-              <span title={new Date(l.created_at).toLocaleString()}>{shortTime(l.created_at)}</span>
-            </Table.Cell>
-            <Table.Cell>
-              <StatusChip status={l.response_status} />
-            </Table.Cell>
-            <Table.Cell className="text-muted-foreground font-semibold">{l.method}</Table.Cell>
-            <Table.Cell className="truncate max-w-xs">{l.path}</Table.Cell>
-            <Table.Cell>
-              <GatewayBadge gateway={l.gateway} />
-            </Table.Cell>
-            <Table.Cell className="text-right tabular-nums text-muted-foreground">
-              {l.duration_ms}ms
-            </Table.Cell>
-          </Table.Row>
-        ))}
-        {rows.length === 0 && (
-          <Table.Row>
-            <Table.Cell colSpan={6} className="text-center text-muted-foreground py-12">
-              <div className="text-sm">No logs yet</div>
-              <div className="text-xs mt-1">
-                Point your app at a mock endpoint and requests will appear here.
-              </div>
-            </Table.Cell>
-          </Table.Row>
-        )}
-      </Table.Body>
+      {loading ? (
+        <TableSkeleton rows={8} columns={6} />
+      ) : (
+        <Table.Body key={nonce}>
+          {rows.map((l) => (
+            <Table.Row
+              key={l.id}
+              className="row-accent cursor-pointer font-mono text-xs transition-colors animate-in fade-in duration-200"
+              onClick={() => onSelect(l.id)}
+            >
+              <Table.Cell className="text-muted-foreground">
+                <span title={new Date(l.created_at).toLocaleString()}>
+                  {shortTime(l.created_at)}
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <StatusChip status={l.response_status} />
+              </Table.Cell>
+              <Table.Cell className="text-muted-foreground font-semibold">{l.method}</Table.Cell>
+              <Table.Cell className="truncate max-w-xs">{l.path}</Table.Cell>
+              <Table.Cell>
+                <GatewayBadge gateway={l.gateway} />
+              </Table.Cell>
+              <Table.Cell className="text-right tabular-nums text-muted-foreground">
+                {l.duration_ms}ms
+              </Table.Cell>
+            </Table.Row>
+          ))}
+          {rows.length === 0 && (
+            <Table.Row>
+              <Table.Cell colSpan={6} className="text-center text-muted-foreground py-12">
+                <div className="text-sm">No logs yet</div>
+                <div className="text-xs mt-1">
+                  Point your app at a mock endpoint and requests will appear here.
+                </div>
+              </Table.Cell>
+            </Table.Row>
+          )}
+        </Table.Body>
+      )}
     </Table.Root>
   );
 }

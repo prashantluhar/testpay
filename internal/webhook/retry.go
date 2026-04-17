@@ -43,6 +43,8 @@ func DispatchAsync(
 			webhookLog.AttemptLogs = append(webhookLog.AttemptLogs, store.AttemptLog{
 				Status:      a.Status,
 				DurationMs:  a.DurationMs,
+				Response:    a.Response,
+				Error:       a.Error,
 				AttemptedAt: a.AttemptedAt.Format(time.RFC3339),
 			})
 			logger.Info().

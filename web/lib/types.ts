@@ -44,6 +44,7 @@ export interface AttemptLog {
   status: number;
   duration_ms: number;
   response: string;
+  error?: string;
   attempted_at: string;
 }
 

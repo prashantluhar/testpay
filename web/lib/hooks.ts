@@ -1,6 +1,45 @@
 import useSWR, { SWRConfiguration } from 'swr';
+import { useEffect, useRef, useState } from 'react';
 import { swrFetcher } from './api';
 import type { AuthResponse, RequestLog, Scenario, Workspace, WebhookLog } from './types';
+
+// Eases a displayed number from 0 → `target` over `duration` ms on first mount.
+// After first mount, subsequent target changes snap directly to the new value
+// (so polling updates don't re-animate). Callers using non-numeric values pass
+// through unchanged via the consumer's logic.
+export function useCountUp(target: number, duration = 600) {
+  const [value, setValue] = useState(0);
+  const mountedRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (mountedRef.current) {
+      setValue(target);
+      return;
+    }
+    mountedRef.current = true;
+    const start = performance.now();
+    const from = 0;
+    const delta = target - from;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      // easeOutCubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(Math.round(from + delta * eased));
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+    // Intentionally run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return value;
+}
 
 export function useMe() {
   return useSWR<AuthResponse>('/api/auth/me', swrFetcher, {

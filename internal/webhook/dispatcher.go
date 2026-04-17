@@ -4,9 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
+
+// maxAttemptBodyBytes caps how much of each attempt's response body we capture.
+// Deliberately tight because attempt bodies are persisted per-delivery in JSONB
+// and the hosted free tier has a 0.5 GB Neon cap; HTML error pages from
+// misconfigured endpoints can balloon this column fast without the limit.
+const maxAttemptBodyBytes = 8 * 1024
 
 type DispatchResult struct {
 	StatusCode  int
@@ -18,6 +25,8 @@ type AttemptEntry struct {
 	Status      int
 	DurationMs  int
 	AttemptedAt time.Time
+	Response    string // response body (capped at maxAttemptBodyBytes)
+	Error       string // transport-level error; empty when an HTTP response was received
 }
 
 type Dispatcher struct {
@@ -59,8 +68,13 @@ func (d *Dispatcher) Dispatch(targetURL string, payload map[string]any) (*Dispat
 		entry := AttemptEntry{DurationMs: durationMs, AttemptedAt: time.Now()}
 		if err != nil {
 			entry.Status = 0
+			entry.Error = err.Error()
 		} else {
 			entry.Status = resp.StatusCode
+			// Cap the body read so a massive error page doesn't bloat the JSONB
+			// column. io.LimitReader + io.ReadAll combines cleanly.
+			bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, maxAttemptBodyBytes))
+			entry.Response = string(bodyBytes)
 			resp.Body.Close()
 			lastStatus = resp.StatusCode
 		}

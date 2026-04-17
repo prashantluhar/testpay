@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useMe } from '@/lib/hooks';
 import { Sidebar } from '@/components/shell/sidebar';
 import { Topbar } from '@/components/shell/topbar';
+import { PageLoader } from '@/components/common/page-loader';
 import { ApiError } from '@/lib/api';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -18,11 +19,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isLoading) {
     return (
-      <div className="min-h-screen grid place-items-center text-muted-foreground">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-6 w-6 border-2 border-muted-foreground/40 border-t-emerald-500 rounded-full animate-spin" />
-          <div className="text-sm">Loading…</div>
-        </div>
+      <div className="min-h-screen grid place-items-center">
+        <PageLoader />
       </div>
     );
   }
