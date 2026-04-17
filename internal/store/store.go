@@ -41,6 +41,13 @@ type Store interface {
 	CreateRequestLog(ctx context.Context, l *RequestLog) error
 	ListRequestLogs(ctx context.Context, workspaceID string, limit, offset int) ([]*RequestLog, error)
 	GetRequestLog(ctx context.Context, id string) (*RequestLog, error)
+	// CountRequestsSince returns the number of request_logs rows for the
+	// given workspace created at-or-after `since`. Used for per-workspace
+	// daily quota enforcement on the mock path.
+	CountRequestsSince(ctx context.Context, workspaceID string, since time.Time) (int, error)
+	// TrimOldLogs deletes request_logs older than `cutoff`. Webhook logs
+	// cascade via the request_log_id FK.
+	TrimOldLogs(ctx context.Context, cutoff time.Time) (int64, error)
 
 	// WebhookLogs
 	CreateWebhookLog(ctx context.Context, l *WebhookLog) error

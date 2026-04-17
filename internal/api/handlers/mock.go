@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -71,6 +72,31 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Str("step", "workspace_resolved").
 		Str("workspace_id", workspaceID).
 		Msg("workspace resolved")
+
+	// ── 1b. Enforce per-workspace daily quota (if set) ──────────────────────
+	// Only checked when a concrete workspace was resolved and it carries a
+	// non-nil cap. The seeded "local" workspace gets 200/day to keep the
+	// hosted demo from burning its free-tier quotas; authenticated users
+	// are unlimited by default. Cost of the check is one indexed COUNT.
+	if workspace != nil && workspace.MaxDailyRequests != nil && h.store != nil {
+		dayAgo := time.Now().Add(-24 * time.Hour)
+		used, cerr := h.store.CountRequestsSince(ctx, workspaceID, dayAgo)
+		if cerr == nil && used >= *workspace.MaxDailyRequests {
+			log.Warn().
+				Str("step", "quota_exceeded").
+				Int("used", used).
+				Int("cap", *workspace.MaxDailyRequests).
+				Str("workspace_id", workspaceID).
+				Msg("workspace exceeded daily request cap")
+			w.Header().Set("Retry-After", "3600")
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w,
+				fmt.Sprintf(`{"error":"daily request cap reached (%d/day) — sign up for a higher limit","used":%d,"cap":%d}`,
+					*workspace.MaxDailyRequests, used, *workspace.MaxDailyRequests),
+				http.StatusTooManyRequests)
+			return
+		}
+	}
 
 	// ── 2. Resolve adapter ──────────────────────────────────────────────────
 	adapter, err := h.registry.Resolve(r.URL.Path)

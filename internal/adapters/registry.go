@@ -7,13 +7,10 @@ import (
 
 	"github.com/prashantluhar/testpay/internal/adapters/adyen"
 	"github.com/prashantluhar/testpay/internal/adapters/agnostic"
-	"github.com/prashantluhar/testpay/internal/adapters/epay"
 	"github.com/prashantluhar/testpay/internal/adapters/espay"
 	"github.com/prashantluhar/testpay/internal/adapters/instamojo"
 	"github.com/prashantluhar/testpay/internal/adapters/komoju"
 	"github.com/prashantluhar/testpay/internal/adapters/mastercard"
-	"github.com/prashantluhar/testpay/internal/adapters/omise"
-	"github.com/prashantluhar/testpay/internal/adapters/payletter"
 	"github.com/prashantluhar/testpay/internal/adapters/paynamics"
 	"github.com/prashantluhar/testpay/internal/adapters/razorpay"
 	"github.com/prashantluhar/testpay/internal/adapters/stripe"
@@ -28,18 +25,19 @@ type Registry struct {
 func NewRegistry() *Registry {
 	r := &Registry{adapters: make(map[string]Adapter)}
 	ag := agnostic.New()
+	// Only gateways with full DTO-backed responses + webhook shapes are
+	// registered. Stub adapters (epay, omise, payletter) were removed
+	// because they returned generic shapes that misrepresented what a
+	// real integration with those PSPs would look like.
 	r.adapters["stripe"] = stripe.New()
 	r.adapters["razorpay"] = razorpay.New()
 	r.adapters["adyen"] = adyen.New()
-	r.adapters["omise"] = omise.New()
 	r.adapters["mastercard"] = mastercard.New()
 	r.adapters["komoju"] = komoju.New()
 	r.adapters["instamojo"] = instamojo.New()
 	r.adapters["tillpay"] = tillpay.New()
 	r.adapters["tappay"] = tappay.New()
-	r.adapters["payletter"] = payletter.New()
 	r.adapters["paynamics"] = paynamics.New()
-	r.adapters["epay"] = epay.New()
 	r.adapters["espay"] = espay.New()
 	r.adapters["agnostic"] = ag
 	// URL-prefix alias: /v1/... routes to the agnostic adapter.

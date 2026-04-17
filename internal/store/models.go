@@ -7,7 +7,12 @@ type Workspace struct {
 	Slug        string            `json:"slug"`
 	APIKey      string            `json:"api_key"`
 	WebhookURLs map[string]string `json:"webhook_urls"`
-	CreatedAt   time.Time         `json:"created_at"`
+	// MaxDailyRequests caps mock-endpoint calls per 24h window.
+	// nil = unlimited (default for authenticated workspaces).
+	// The seeded "local" workspace gets a low cap so anonymous demo
+	// traffic can't drain the free-tier quotas.
+	MaxDailyRequests *int      `json:"max_daily_requests,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 type User struct {

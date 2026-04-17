@@ -62,8 +62,9 @@ func (s *Store) CreateWorkspace(ctx context.Context, w *store.Workspace) error {
 		return err
 	}
 	_, err = s.pool.Exec(ctx,
-		`INSERT INTO workspaces (id, slug, api_key, webhook_urls) VALUES ($1, $2, $3, $4)`,
-		w.ID, w.Slug, w.APIKey, urls,
+		`INSERT INTO workspaces (id, slug, api_key, webhook_urls, max_daily_requests)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		w.ID, w.Slug, w.APIKey, urls, w.MaxDailyRequests,
 	)
 	logSlow(ctx, "CreateWorkspace", start, err)
 	return err
@@ -72,7 +73,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, w *store.Workspace) error {
 func (s *Store) GetWorkspaceByAPIKey(ctx context.Context, apiKey string) (*store.Workspace, error) {
 	start := time.Now()
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, slug, api_key, webhook_urls, created_at FROM workspaces WHERE api_key = $1`, apiKey)
+		`SELECT id, slug, api_key, webhook_urls, max_daily_requests, created_at FROM workspaces WHERE api_key = $1`, apiKey)
 	ws, err := scanWorkspace(row)
 	logSlow(ctx, "GetWorkspaceByAPIKey", start, err)
 	return ws, err
@@ -81,7 +82,7 @@ func (s *Store) GetWorkspaceByAPIKey(ctx context.Context, apiKey string) (*store
 func (s *Store) GetWorkspaceBySlug(ctx context.Context, slug string) (*store.Workspace, error) {
 	start := time.Now()
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, slug, api_key, webhook_urls, created_at FROM workspaces WHERE slug = $1`, slug)
+		`SELECT id, slug, api_key, webhook_urls, max_daily_requests, created_at FROM workspaces WHERE slug = $1`, slug)
 	ws, err := scanWorkspace(row)
 	logSlow(ctx, "GetWorkspaceBySlug", start, err)
 	return ws, err
@@ -90,7 +91,7 @@ func (s *Store) GetWorkspaceBySlug(ctx context.Context, slug string) (*store.Wor
 func (s *Store) GetWorkspaceByID(ctx context.Context, id string) (*store.Workspace, error) {
 	start := time.Now()
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, slug, api_key, webhook_urls, created_at FROM workspaces WHERE id = $1`, id)
+		`SELECT id, slug, api_key, webhook_urls, max_daily_requests, created_at FROM workspaces WHERE id = $1`, id)
 	ws, err := scanWorkspace(row)
 	logSlow(ctx, "GetWorkspaceByID", start, err)
 	return ws, err
@@ -116,7 +117,7 @@ func (s *Store) UpdateWorkspace(ctx context.Context, w *store.Workspace) error {
 func scanWorkspace(row pgx.Row) (*store.Workspace, error) {
 	var w store.Workspace
 	var urlsRaw []byte
-	if err := row.Scan(&w.ID, &w.Slug, &w.APIKey, &urlsRaw, &w.CreatedAt); err != nil {
+	if err := row.Scan(&w.ID, &w.Slug, &w.APIKey, &urlsRaw, &w.MaxDailyRequests, &w.CreatedAt); err != nil {
 		return nil, fmt.Errorf("workspace not found: %w", err)
 	}
 	w.WebhookURLs = map[string]string{}
@@ -369,6 +370,31 @@ func (s *Store) ListRequestLogs(ctx context.Context, workspaceID string, limit, 
 	return out, err
 }
 
+func (s *Store) CountRequestsSince(ctx context.Context, workspaceID string, since time.Time) (int, error) {
+	start := time.Now()
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM request_logs WHERE workspace_id = $1 AND created_at >= $2`,
+		workspaceID, since,
+	).Scan(&n)
+	logSlow(ctx, "CountRequestsSince", start, err)
+	return n, err
+}
+
+// TrimOldLogs deletes request_logs older than cutoff. Webhook rows cascade
+// via request_log_id FK. Returns rows deleted.
+func (s *Store) TrimOldLogs(ctx context.Context, cutoff time.Time) (int64, error) {
+	start := time.Now()
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM request_logs WHERE created_at < $1`, cutoff,
+	)
+	logSlow(ctx, "TrimOldLogs", start, err)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 func (s *Store) GetRequestLog(ctx context.Context, id string) (*store.RequestLog, error) {
 	start := time.Now()
 	row := s.pool.QueryRow(ctx,
@@ -587,16 +613,23 @@ var _ store.Store = (*Store)(nil)
 const LocalWorkspaceID = store.LocalWorkspaceID
 
 // SeedLocalWorkspace creates the default local workspace if it doesn't exist.
-func SeedLocalWorkspace(ctx context.Context, s *Store) error {
+// dailyCap is the per-24h request limit (0 = unlimited). Migrations already
+// set this to 200 on existing databases, but fresh boots need the seed to
+// carry the cap in the INSERT payload.
+func SeedLocalWorkspace(ctx context.Context, s *Store, dailyCap int) error {
 	_, err := s.GetWorkspaceBySlug(ctx, "local")
 	if err == nil {
 		return nil // already exists
 	}
-	return s.CreateWorkspace(ctx, &store.Workspace{
+	ws := &store.Workspace{
 		ID:     store.LocalWorkspaceID,
 		Slug:   "local",
 		APIKey: "local",
-	})
+	}
+	if dailyCap > 0 {
+		ws.MaxDailyRequests = &dailyCap
+	}
+	return s.CreateWorkspace(ctx, ws)
 }
 
 // unused import guard

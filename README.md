@@ -44,8 +44,9 @@ TestPay gives you a mock gateway that behaves exactly like Stripe, Razorpay, or 
 - **Gateway-agnostic engine** — Stripe, Razorpay, and a generic "agnostic" adapter today; more coming
 - **Embedded dashboard** — `./testpay start` serves both the API (`:7700`) and the dashboard (`:7701`) from one binary
 - **One-shot failure simulation** — drop an `X-TestPay-Outcome: <mode>` header on any mock request to fire that exact failure without creating a scenario first
-- **Sequential scenario replay** — multi-step scenarios now advance across successive SDK calls (call 1 → step 0, call 2 → step 1, …) via a per-session counter
+- **Sequential scenario replay** — multi-step scenarios advance across successive SDK calls (call 1 → step 0, call 2 → step 1, …) via a per-session counter
 - **Public docs** — `/docs` is accessible without an account: getting started, per-adapter response + webhook shapes, failure-modes reference, full API reference
+- **Pilot-safe by default** — hourly log trimmer (keeps only the last 10 days), per-workspace daily request cap, rate-limited feedback endpoint. All tunable via `retention:` in the YAML config.
 
 ---
 
@@ -450,6 +451,29 @@ curl -X POST "$API/stripe/v1/charges" \
 ```
 
 The mock charge should appear on the dashboard's `/logs` page.
+
+### Retention, quotas, and trimmer — configurable
+
+Three knobs under the `retention:` block in your config YAML control pilot-safety behavior:
+
+```yaml
+retention:
+  log_retention_days: 10          # mock request_logs older than this get deleted
+  trimmer_interval_minutes: 60    # how often the in-process sweeper runs
+  demo_workspace_daily_cap: 200   # requests/day on the seeded "local" workspace
+```
+
+**What each does:**
+
+- **`log_retention_days`** — a background goroutine (started by `testpay start`) deletes `request_logs` rows older than this every `trimmer_interval_minutes`. `webhook_logs` cascade via FK so they go with their parent. Keeps Neon's 0.5 GB storage cap safe and stops the dashboard's Logs tab from growing unbounded. Default: 10 days.
+- **`trimmer_interval_minutes`** — how often the sweep runs. An initial sweep also fires ~30s after boot so restarting the server actively reclaims space. Default: 60.
+- **`demo_workspace_daily_cap`** — the seeded `local` workspace (anonymous demo traffic hitting the hosted instance) gets this many mock requests per 24h. Over the cap → HTTP 429 with `Retry-After: 3600`. Signed-up workspaces are unlimited unless you set `max_daily_requests` on their row directly. Default: 200. Set to 0 to disable.
+
+Per-workspace override (any workspace can be capped individually):
+```sql
+UPDATE workspaces SET max_daily_requests = 500 WHERE slug = 'acme-corp';
+UPDATE workspaces SET max_daily_requests = NULL WHERE slug = 'internal-team';  -- unlimited
+```
 
 ### Keep the hosted instance warm
 

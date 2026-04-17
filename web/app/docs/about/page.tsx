@@ -51,7 +51,7 @@ export default function AboutPage() {
           </Text>
           <Text size="3" as="p">
             TestPay gives you a gateway that behaves exactly like the real thing, including{' '}
-            <strong>every way it can fail</strong>. 28 failure modes across 13 gateways, each
+            <strong>every way it can fail</strong>. 28 failure modes across 10 production-shape gateways, each
             replayable from a URL or a one-line header.
           </Text>
         </Flex>

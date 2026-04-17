@@ -17,8 +17,10 @@ import (
 	"github.com/prashantluhar/testpay/internal/config"
 	"github.com/prashantluhar/testpay/internal/observability"
 	pgstore "github.com/prashantluhar/testpay/internal/store/postgres"
+	"github.com/prashantluhar/testpay/internal/trimmer"
 	"github.com/prashantluhar/testpay/web"
 )
+
 
 var (
 	configPath    string
@@ -51,13 +53,24 @@ var startCmd = &cobra.Command{
 		if err := pgstore.RunMigrations(pool); err != nil {
 			return fmt.Errorf("running migrations: %w", err)
 		}
-		if err := pgstore.SeedLocalWorkspace(ctx, s); err != nil {
+		if err := pgstore.SeedLocalWorkspace(ctx, s, cfg.Retention.DemoWorkspaceDailyCap); err != nil {
 			return fmt.Errorf("seeding workspace: %w", err)
 		}
 
 		srv := api.NewServer(cfg, s)
 
 		log.Info().Msgf("TestPay API running on %s:%d (mode=%s)", cfg.Server.Host, cfg.Server.Port, cfg.Server.Mode)
+
+		// Background log trimmer — interval + retention window both come
+		// from the loaded config (cfg.Retention.*), with 60-min / 10-day
+		// defaults.
+		trimmerCtx, cancelTrimmer := context.WithCancel(context.Background())
+		defer cancelTrimmer()
+		go trimmer.Run(
+			trimmerCtx, s,
+			time.Duration(cfg.Retention.TrimmerIntervalMinutes)*time.Minute,
+			time.Duration(cfg.Retention.LogRetentionDays)*24*time.Hour,
+		)
 
 		go func() {
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

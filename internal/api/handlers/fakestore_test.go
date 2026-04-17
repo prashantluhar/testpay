@@ -306,6 +306,10 @@ func (f *fakeStore) GetRequestLog(_ context.Context, id string) (*store.RequestL
 	}
 	return nil, fmt.Errorf("not found")
 }
+func (f *fakeStore) CountRequestsSince(_ context.Context, _ string, _ time.Time) (int, error) {
+	return 0, nil
+}
+func (f *fakeStore) TrimOldLogs(_ context.Context, _ time.Time) (int64, error) { return 0, nil }
 
 // Webhook logs -----------------------------------------------------------
 

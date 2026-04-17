@@ -74,7 +74,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="grid grid-cols-3 gap-3">
             {[
               { n: '28', l: 'failure modes' },
-              { n: '13', l: 'gateways' },
+              { n: '10', l: 'gateways' },
               { n: '1', l: 'binary' },
             ].map((s, i) => (
               <div

@@ -43,7 +43,11 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 
 	// Feedback endpoint — public so visitors on /docs can submit too.
 	// Session context (if present) enriches the row with user/workspace ids.
-	r.Post("/api/feedback", handlers.Feedback(s))
+	// Tight per-IP rate limit because this is an unauth write endpoint and
+	// a noisy caller could spam the feedback table: 5 submissions/min per
+	// IP, burst 3 — well above a human's real click rate, stops bots.
+	feedbackLimiter := middleware.NewRateLimiter(5, 3, 0).Middleware
+	r.With(feedbackLimiter).Post("/api/feedback", handlers.Feedback(s))
 
 	// Mock gateway endpoints — one /{gateway}/* route per registered adapter.
 	// The handler uses the original URL path to resolve the gateway; don't

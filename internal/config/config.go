@@ -21,6 +21,7 @@ type Config struct {
 	Cloud        CloudConfig
 	Integrations IntegrationsConfig
 	RateLimit    RateLimitConfig
+	Retention    RetentionConfig
 }
 
 type ServerConfig struct {
@@ -105,6 +106,23 @@ type RateLimitConfig struct {
 	Burst             int
 }
 
+// RetentionConfig controls the background log-trimmer + anonymous-workspace
+// quota. Hosted deployments tune these to stay within storage limits and
+// prevent a runaway SDK integration from draining the demo's free-tier
+// resources.
+type RetentionConfig struct {
+	// LogRetentionDays — request_logs older than this are swept by the
+	// trimmer. Defaults to 10.
+	LogRetentionDays int
+	// TrimmerIntervalMinutes — how often the trimmer wakes. Defaults to 60.
+	TrimmerIntervalMinutes int
+	// DemoWorkspaceDailyCap — requests/day cap for the seeded "local"
+	// workspace (anonymous demo traffic). 0 = unlimited. Defaults to 200.
+	// Signed-up workspaces get no cap by default; change via the
+	// workspaces.max_daily_requests column per-workspace if needed.
+	DemoWorkspaceDailyCap int
+}
+
 // rawYAML mirrors the on-disk YAML structure. All _env fields stay as env var
 // NAMES here; the actual secret values are resolved into Config later.
 type rawYAML struct {
@@ -172,6 +190,11 @@ type rawYAML struct {
 		RequestsPerMinute int `yaml:"requests_per_minute"`
 		Burst             int `yaml:"burst"`
 	} `yaml:"rate_limit"`
+	Retention struct {
+		LogRetentionDays       int `yaml:"log_retention_days"`
+		TrimmerIntervalMinutes int `yaml:"trimmer_interval_minutes"`
+		DemoWorkspaceDailyCap  int `yaml:"demo_workspace_daily_cap"`
+	} `yaml:"retention"`
 }
 
 // Load is the default entry (no config file).
@@ -228,7 +251,12 @@ func defaults() *Config {
 		},
 		Cloud:        CloudConfig{Provider: "none"},
 		Integrations: IntegrationsConfig{Sentry: SentryConfig{SampleRate: 1.0}},
-		RateLimit:    RateLimitConfig{RequestsPerMinute: 600, Burst: 100},
+		RateLimit: RateLimitConfig{RequestsPerMinute: 600, Burst: 100},
+		Retention: RetentionConfig{
+			LogRetentionDays:       10,
+			TrimmerIntervalMinutes: 60,
+			DemoWorkspaceDailyCap:  200,
+		},
 	}
 }
 
@@ -365,6 +393,18 @@ func applyYAML(cfg *Config, y *rawYAML) error {
 	}
 	if y.RateLimit.Burst > 0 {
 		cfg.RateLimit.Burst = y.RateLimit.Burst
+	}
+
+	// retention — only override defaults when the YAML explicitly sets a
+	// positive value; 0 keeps the coded defaults (10 days / 60 min / 200 cap).
+	if y.Retention.LogRetentionDays > 0 {
+		cfg.Retention.LogRetentionDays = y.Retention.LogRetentionDays
+	}
+	if y.Retention.TrimmerIntervalMinutes > 0 {
+		cfg.Retention.TrimmerIntervalMinutes = y.Retention.TrimmerIntervalMinutes
+	}
+	if y.Retention.DemoWorkspaceDailyCap > 0 {
+		cfg.Retention.DemoWorkspaceDailyCap = y.Retention.DemoWorkspaceDailyCap
 	}
 
 	return nil

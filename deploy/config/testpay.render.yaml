@@ -33,3 +33,17 @@ cloud:
 # enforces a global cap of 5x this value across all IPs combined. Bump both
 # if you ever upgrade off free tier.
 rate_limit: { requests_per_minute: 30, burst: 10 }
+
+# Pilot-safety guardrails — tuned for Neon free tier (0.5 GB storage).
+# log_retention_days       — mock request_logs older than this are deleted
+#                            hourly by the in-process trimmer.
+# trimmer_interval_minutes — how often the trimmer runs. 60 is plenty.
+# demo_workspace_daily_cap — hard cap on requests for the seeded "local"
+#                            workspace (anonymous demo traffic). Signed-up
+#                            workspaces stay unlimited by default; set
+#                            workspaces.max_daily_requests per row to cap
+#                            specific ones.
+retention:
+  log_retention_days: 10
+  trimmer_interval_minutes: 60
+  demo_workspace_daily_cap: 200
