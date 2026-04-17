@@ -125,28 +125,41 @@ func WorkspaceIDFromContext(ctx context.Context) (string, bool) {
 	return v, ok && v != ""
 }
 
+// cookieAttrsFor returns the Secure and SameSite attributes appropriate for the
+// given server mode. Hosted deploys sit behind a TLS-terminating proxy and are
+// accessed from a different subdomain than the dashboard, so the browser
+// requires SameSite=None with Secure=true for the cookie to be sent on XHR.
+func cookieAttrsFor(mode string) (secure bool, sameSite http.SameSite) {
+	if mode == "hosted" {
+		return true, http.SameSiteNoneMode
+	}
+	return false, http.SameSiteLaxMode
+}
+
 // SetSessionCookie writes the session cookie.
-func SetSessionCookie(w http.ResponseWriter, token string, secure bool) {
+func SetSessionCookie(w http.ResponseWriter, token, mode string) {
+	secure, sameSite := cookieAttrsFor(mode)
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
 		MaxAge:   30 * 24 * 60 * 60, // 30 days
 	})
 }
 
 // ClearSessionCookie writes an expired cookie.
-func ClearSessionCookie(w http.ResponseWriter, secure bool) {
+func ClearSessionCookie(w http.ResponseWriter, mode string) {
+	secure, sameSite := cookieAttrsFor(mode)
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
 		MaxAge:   -1,
 	})
 }

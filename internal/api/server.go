@@ -51,9 +51,9 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 	// Control API — /api/auth/* stays open; everything else requires a session.
 	r.Route("/api", func(r chi.Router) {
 		// Public auth routes.
-		r.Post("/auth/signup", handlers.Signup(s, cfg.Auth.JWTSecret))
-		r.Post("/auth/login", handlers.Login(s, cfg.Auth.JWTSecret))
-		r.Post("/auth/logout", handlers.Logout())
+		r.Post("/auth/signup", handlers.Signup(s, cfg.Auth.JWTSecret, cfg.Server.Mode))
+		r.Post("/auth/login", handlers.Login(s, cfg.Auth.JWTSecret, cfg.Server.Mode))
+		r.Post("/auth/logout", handlers.Logout(cfg.Server.Mode))
 		r.Get("/auth/me", handlers.Me(s))
 
 		// Authenticated routes — require a valid session cookie. Bearer api_key

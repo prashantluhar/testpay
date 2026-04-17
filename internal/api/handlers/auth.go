@@ -34,7 +34,7 @@ const (
 	minPasswordLen = 8
 )
 
-func Signup(s store.Store, jwtSecret string) http.HandlerFunc {
+func Signup(s store.Store, jwtSecret, mode string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		zerolog.Ctx(ctx).Info().Str("handler", "Signup").Msg("handler entry")
@@ -103,7 +103,7 @@ func Signup(s store.Store, jwtSecret string) http.HandlerFunc {
 			authError(w, 500, "failed to issue session")
 			return
 		}
-		middleware.SetSessionCookie(w, token, r.TLS != nil)
+		middleware.SetSessionCookie(w, token, mode)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(201)
@@ -111,7 +111,7 @@ func Signup(s store.Store, jwtSecret string) http.HandlerFunc {
 	}
 }
 
-func Login(s store.Store, jwtSecret string) http.HandlerFunc {
+func Login(s store.Store, jwtSecret, mode string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		zerolog.Ctx(ctx).Info().Str("handler", "Login").Msg("handler entry")
@@ -142,7 +142,7 @@ func Login(s store.Store, jwtSecret string) http.HandlerFunc {
 			authError(w, 500, "failed to issue session")
 			return
 		}
-		middleware.SetSessionCookie(w, token, r.TLS != nil)
+		middleware.SetSessionCookie(w, token, mode)
 
 		ws, _ := getWorkspaceByID(ctx, s, u.WorkspaceID)
 		w.Header().Set("Content-Type", "application/json")
@@ -150,10 +150,10 @@ func Login(s store.Store, jwtSecret string) http.HandlerFunc {
 	}
 }
 
-func Logout() http.HandlerFunc {
+func Logout(mode string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		zerolog.Ctx(r.Context()).Info().Str("handler", "Logout").Msg("handler entry")
-		middleware.ClearSessionCookie(w, r.TLS != nil)
+		middleware.ClearSessionCookie(w, mode)
 		w.WriteHeader(204)
 	}
 }

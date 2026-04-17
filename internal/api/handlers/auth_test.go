@@ -75,7 +75,7 @@ func (m *authMockStore) GetWorkspaceByID(_ context.Context, id string) (*store.W
 
 func TestSignup_createsUserAndWorkspace(t *testing.T) {
 	ms := newAuthMock()
-	h := handlers.Signup(ms, "test-secret")
+	h := handlers.Signup(ms, "test-secret", "local")
 
 	body, _ := json.Marshal(map[string]string{"email": "alice@example.com", "password": "password123"})
 	req := httptest.NewRequest("POST", "/api/auth/signup", bytes.NewReader(body))
@@ -108,7 +108,7 @@ func TestLogin_validCredentials(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
-	handlers.Login(ms, "test-secret").ServeHTTP(rec, req)
+	handlers.Login(ms, "test-secret", "local").ServeHTTP(rec, req)
 	assert.Equal(t, 200, rec.Code)
 }
 
@@ -122,7 +122,7 @@ func TestLogin_wrongPassword(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
-	handlers.Login(ms, "test-secret").ServeHTTP(rec, req)
+	handlers.Login(ms, "test-secret", "local").ServeHTTP(rec, req)
 	assert.Equal(t, 401, rec.Code)
 }
 

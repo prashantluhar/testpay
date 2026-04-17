@@ -219,12 +219,122 @@ All HTTP requests pass through a middleware chain that logs full headers, bodies
 
 **Dashboard:**
 - **Local:** embedded in the Go binary — run `./testpay start` and open http://localhost:7701
-- **Hosted:** deploy `web/` to Vercel (see `web/vercel.json` once added). Set `NEXT_PUBLIC_TESTPAY_MODE=hosted`.
+- **Hosted:** deploy `web/` to Vercel or Render Static Site. Set `NEXT_PUBLIC_TESTPAY_MODE=hosted` and `NEXT_PUBLIC_API_BASE=https://your-api-host`.
 
 **Backend:**
 - **Docker:** `docker compose -f deploy/docker/docker-compose.yml up -d`
 - **Kubernetes:** `kubectl apply -f deploy/k8s/`
-- **Fly.io / Render / any PaaS:** `go build` the binary + Postgres
+- **Render + Neon (free tier):** see [Hosted Deploy](#hosted-deploy-render--neon-free-tier) below
+- **Fly.io / any PaaS:** `go build` the binary + Postgres
+
+---
+
+## Hosted Deploy (Render + Neon, Free Tier)
+
+End-to-end recipe for a public, $0 demo instance. Architecture:
+
+```
+testpay-web (Render static site) ──► testpay-api (Render web service, Docker)
+                                              │
+                                              ▼
+                                      Neon Postgres 16
+```
+
+Full design + trade-offs: `docs/superpowers/specs/2026-04-17-render-neon-deploy-design.md`.
+
+### Prerequisites
+
+- GitHub account with this repo pushed
+- Free account on [Neon](https://neon.tech)
+- Free account on [Render](https://render.com)
+
+### 1. Neon — create the database
+
+1. Sign up at neon.tech, create a new project — pick Postgres 16, region closest to you.
+2. Create a database named `neondb` (the default role `neondb_owner` is created automatically).
+3. On the project dashboard → **Connection Details** → toggle **Pooled connection** ON, copy the connection string. It looks like:
+   ```
+   postgresql://neondb_owner:***@ep-xxxxx-pooler.<region>.aws.neon.tech/neondb?sslmode=require
+   ```
+   Keep this URL secret — never commit it.
+
+### 2. Render — API web service
+
+1. Render dashboard → **New → Web Service** → connect GitHub and pick the `testpay` repo.
+2. Fill the form:
+
+   | Field | Value |
+   |---|---|
+   | Name | `testpay-api` |
+   | Language | **Docker** |
+   | Branch | `main` |
+   | Region | same region as Neon (e.g. **Singapore**) |
+   | Root Directory | *(blank)* |
+   | Dockerfile Path | `./deploy/docker/Dockerfile` |
+   | Docker Build Context Directory | `.` |
+   | Instance Type | **Free** |
+   | Health Check Path | *(blank)* |
+   | Auto-Deploy | On Commit |
+
+3. Scroll to **Advanced → Environment Variables** and add:
+
+   | Key | Value |
+   |---|---|
+   | `DATABASE_URL` | Neon pooled URL from step 1 |
+   | `JWT_SECRET` | `openssl rand -hex 32` output |
+   | `API_KEY` | `openssl rand -hex 32` output |
+   | `CORS_ALLOWED_ORIGINS` | `https://testpay-web.onrender.com` |
+
+   Do **not** set `PORT` — Render injects it automatically.
+
+4. Click **Deploy Web Service**. The Docker build takes 3-5 minutes on cold cache.
+
+### 3. Render — dashboard static site
+
+1. Render dashboard → **New → Static Site** → same repo.
+2. Fill the form:
+
+   | Field | Value |
+   |---|---|
+   | Name | `testpay-web` |
+   | Branch | `main` |
+   | Root Directory | `web` |
+   | Build Command | `pnpm install && pnpm build` |
+   | Publish Directory | `out` |
+
+3. **Environment Variables** (baked in at build time):
+
+   | Key | Value |
+   |---|---|
+   | `NEXT_PUBLIC_API_BASE` | `https://testpay-api.onrender.com` |
+   | `NEXT_PUBLIC_TESTPAY_MODE` | `hosted` |
+
+4. Click **Create Static Site**.
+
+### 4. Smoke test
+
+```bash
+API=https://testpay-api.onrender.com
+WEB=https://testpay-web.onrender.com
+
+# Visit the dashboard, sign up, log in
+open "$WEB/signup"
+
+# After signup, grab your API key from the Settings page, then:
+curl -X POST "$API/stripe/v1/charges" \
+  -H "Authorization: Bearer $YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":5000,"currency":"usd"}'
+```
+
+The mock charge should appear on the dashboard's `/logs` page.
+
+### Free-tier quirks to expect
+
+- **First request after 15 min idle is slow** — `testpay-api` sleeps on Render free; expect ~30-60 s to wake. Subsequent requests are fast until the next idle window.
+- **Neon suspends after ~5 min** — adds ~500 ms to the first DB query after idle. Negligible after that.
+- **Neon storage cap: 0.5 GB** — plenty for demo traffic. The `request_logs` table is the heaviest; truncate periodically if you stress-test.
+- **One Render free web service** — if the binary crashes you'll get 502s until the next deploy. Push a fix and it auto-redeploys.
 
 ---
 

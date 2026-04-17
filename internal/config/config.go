@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -400,5 +401,17 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("LOG_FORMAT"); v != "" {
 		cfg.Logging.Format = v
+	}
+	if v := os.Getenv("CORS_ALLOWED_ORIGINS"); v != "" {
+		parts := strings.Split(v, ",")
+		origins := parts[:0]
+		for _, p := range parts {
+			if t := strings.TrimSpace(p); t != "" {
+				origins = append(origins, t)
+			}
+		}
+		if len(origins) > 0 {
+			cfg.CORS.AllowedOrigins = origins
+		}
 	}
 }
