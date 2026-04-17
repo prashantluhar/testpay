@@ -15,7 +15,12 @@ import (
 var migrationsFS embed.FS
 
 func RunMigrations(pool *pgxpool.Pool) error {
+	// stdlib.OpenDBFromPool acquires connections from the underlying pgxpool and
+	// keeps them held by database/sql until db.Close() is called. Without this
+	// defer, pool.Close() hangs forever waiting for those acquisitions to be
+	// released — bites in tests that tear down the pool, and leaks slots in prod.
 	db := stdlib.OpenDBFromPool(pool)
+	defer db.Close()
 
 	driver, err := pgmigrate.WithInstance(db, &pgmigrate.Config{})
 	if err != nil {
