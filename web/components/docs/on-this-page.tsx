@@ -1,49 +1,76 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 type TocItem = { id: string; text: string; depth: number };
 
 // Scans the docs page main content for h1/h2 headings after mount, slugifies
-// their text to build anchor IDs, and renders a scroll-spy nav. Each time the
-// pathname changes we re-scan so navigating between docs rebuilds the list.
+// their text to build anchor IDs, and renders a scroll-spy nav. Re-scans on
+// every pathname change because Next.js App Router keeps the docs layout
+// mounted across route transitions — without a pathname dep the TOC would
+// stick on whichever page loaded first.
 //
-// Works with Radix Themes <Heading> even though it defaults to <h1> because
-// we walk tag names, not component identity. We skip the page's FIRST h1
-// (the page title) to avoid a redundant top entry.
+// Works with Radix Themes <Heading> even though it defaults to <h1>: we walk
+// tag names, not component identity. We skip the page's FIRST heading (the
+// page title) to avoid a redundant top entry.
 export function OnThisPage({ containerSelector = 'main' }: { containerSelector?: string }) {
   const [items, setItems] = useState<TocItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
-    const root = document.querySelector(containerSelector);
-    if (!root) return;
-    const nodes = Array.from(root.querySelectorAll('h1, h2, h3')) as HTMLElement[];
-    if (nodes.length === 0) return;
+    // Clear immediately so the old page's TOC disappears during navigation.
+    setItems([]);
+    setActiveId(null);
 
-    // Drop the first heading — it's the page title and would be a
-    // no-op scroll target from its own TOC.
-    const body = nodes.slice(1);
+    // Defer the scan one microtask so the new page's markup is actually
+    // mounted before we measure.
+    let cancelled = false;
+    let obs: IntersectionObserver | null = null;
 
-    const toc: TocItem[] = body.map((el) => {
-      if (!el.id) el.id = slugify(el.textContent || '');
-      return { id: el.id, text: el.textContent || '', depth: parseInt(el.tagName[1], 10) };
-    });
-    setItems(toc);
+    const scan = () => {
+      if (cancelled) return;
+      const root = document.querySelector(containerSelector);
+      if (!root) return;
+      const nodes = Array.from(root.querySelectorAll('h1, h2, h3')) as HTMLElement[];
+      if (nodes.length === 0) return;
 
-    // Scroll-spy via IntersectionObserver.
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.filter((e) => e.isIntersecting);
-        if (visible.length > 0) {
-          visible.sort((a, b) => (a.target as HTMLElement).offsetTop - (b.target as HTMLElement).offsetTop);
-          setActiveId(visible[0].target.id);
-        }
-      },
-      { rootMargin: '0px 0px -70% 0px', threshold: 0.1 },
-    );
-    body.forEach((el) => obs.observe(el));
-    return () => obs.disconnect();
-  }, [containerSelector]);
+      // Drop the first heading — it's the page title and would be a
+      // no-op scroll target from its own TOC.
+      const body = nodes.slice(1);
+
+      const toc: TocItem[] = body.map((el) => {
+        if (!el.id) el.id = slugify(el.textContent || '');
+        return { id: el.id, text: el.textContent || '', depth: parseInt(el.tagName[1], 10) };
+      });
+      setItems(toc);
+
+      // Scroll-spy via IntersectionObserver.
+      obs = new IntersectionObserver(
+        (entries) => {
+          const visible = entries.filter((e) => e.isIntersecting);
+          if (visible.length > 0) {
+            visible.sort(
+              (a, b) =>
+                (a.target as HTMLElement).offsetTop - (b.target as HTMLElement).offsetTop,
+            );
+            setActiveId(visible[0].target.id);
+          }
+        },
+        { rootMargin: '0px 0px -70% 0px', threshold: 0.1 },
+      );
+      body.forEach((el) => obs!.observe(el));
+    };
+
+    // Two RAFs — lets Next.js finish swapping the page's children before we
+    // query the DOM. A single RAF sometimes runs before the new markup lands.
+    requestAnimationFrame(() => requestAnimationFrame(scan));
+
+    return () => {
+      cancelled = true;
+      obs?.disconnect();
+    };
+  }, [containerSelector, pathname]);
 
   if (items.length === 0) return null;
 
