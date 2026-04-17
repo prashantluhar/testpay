@@ -51,7 +51,7 @@ export default function SettingsPage() {
   const { workspace, user } = me;
 
   const baseUrl =
-    MODE === 'local' ? 'http://localhost:7700' : `https://api.testpay.dev/ws_${workspace.slug}`;
+    MODE === 'local' ? 'http://localhost:7700' : (process.env.NEXT_PUBLIC_API_BASE || '');
 
   async function saveWebhooks() {
     setSaving(true);

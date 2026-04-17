@@ -25,9 +25,7 @@ export default function OverviewPage() {
   const failed = webhooks?.filter((w) => w.delivery_status === 'failed').length ?? 0;
 
   const baseUrl =
-    MODE === 'local'
-      ? 'http://localhost:7700'
-      : `https://api.testpay.dev/ws_${me?.workspace.slug}`;
+    MODE === 'local' ? 'http://localhost:7700' : (process.env.NEXT_PUBLIC_API_BASE || '');
 
   function copyGatewayUrl(g: string) {
     const url = g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`;
