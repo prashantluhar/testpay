@@ -45,19 +45,19 @@ jobs:
         run: go vet ./...
       - name: Build
         run: go build -o bin/testpay ./cmd/testpay
-      - name: Run all tests with coverage
+      - name: Run tested packages with coverage
+        # Only the packages that have test files — adapter stubs (adyen,
+        # epay, espay, instamojo, komoju, mastercard, omise, payletter,
+        # paynamics, tappay, tillpay), cli, cmd/testpay, observability, and
+        # the api wiring package are skipped. go vet + go build above already
+        # verified they compile. Keeping the list tight speeds CI and keeps
+        # the coverage denominator honest.
         env:
           TEST_DATABASE_URL: postgres://testpay:testpay@localhost:5432/testpay?sslmode=disable
-          # Coverage is measured only for packages that actually have tests.
-          # The per-gateway adapter packages under internal/adapters/<name>/
-          # (adyen, epay, espay, instamojo, komoju, mastercard, omise,
-          # payletter, paynamics, tappay, tillpay) are intentional stubs for
-          # dynamic route registration and carry no test files; including
-          # them would dilute the total with guaranteed 0% lines.
-          COVERPKG: >-
-            ./internal/adapters,./internal/adapters/agnostic,./internal/adapters/razorpay,./internal/adapters/stripe,./internal/api/handlers,./internal/api/middleware,./internal/config,./internal/engine,./internal/store/postgres,./internal/webhook
         run: |
-          go test ./... -count=1 -race -coverprofile=coverage.out -covermode=atomic -coverpkg="$COVERPKG"
+          PKGS="./internal/adapters ./internal/adapters/agnostic ./internal/adapters/razorpay ./internal/adapters/stripe ./internal/api/handlers ./internal/api/middleware ./internal/config ./internal/engine ./internal/store/postgres ./internal/webhook"
+          COVERPKG=$(echo "$PKGS" | tr ' ' ',')
+          go test $PKGS -count=1 -race -coverprofile=coverage.out -covermode=atomic -coverpkg="$COVERPKG"
           go tool cover -func=coverage.out
       - name: Enforce 40% coverage threshold
         # Floor, not aspiration — ratchet upward as tests are added. Do not

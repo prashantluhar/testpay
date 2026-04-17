@@ -15,10 +15,14 @@ import (
 var migrationsFS embed.FS
 
 func RunMigrations(pool *pgxpool.Pool) error {
-	// stdlib.OpenDBFromPool acquires connections from the underlying pgxpool and
-	// keeps them held by database/sql until db.Close() is called. Without this
-	// defer, pool.Close() hangs forever waiting for those acquisitions to be
-	// released — bites in tests that tear down the pool, and leaks slots in prod.
+	// Two sources of held connections need to be released before this function
+	// returns, or pool.Close() will block forever on puddle's WaitGroup:
+	//   1. stdlib.OpenDBFromPool wraps the pool in a *sql.DB that keeps idle
+	//      connections acquired from puddle's perspective. db.Close() releases
+	//      them.
+	//   2. pgmigrate.WithInstance acquires a dedicated *sql.Conn to hold the
+	//      PostgreSQL advisory lock for the migration session. Only m.Close()
+	//      releases it — db.Close() doesn't reach it.
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
 
@@ -36,6 +40,7 @@ func RunMigrations(pool *pgxpool.Pool) error {
 	if err != nil {
 		return fmt.Errorf("creating migrator: %w", err)
 	}
+	defer func() { _, _ = m.Close() }()
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("running migrations: %w", err)

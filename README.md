@@ -130,12 +130,72 @@ go test ./...
 export TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5432/testpay?sslmode=disable"
 go test ./internal/store/postgres/... -v
 
-# Coverage (target 90% in CI)
+# Coverage (40% floor enforced in CI, scoped to tested packages only)
 make coverage-check
 
 # Frontend tests
 cd web && pnpm test
 ```
+
+---
+
+## CLI
+
+`testpay` is a single Cobra binary. All commands either boot the server (`start`) or talk to a running local server over HTTP at `localhost:7700`.
+
+### Available commands
+
+| Command | What it does |
+|---|---|
+| `testpay start` | Boot the server + embedded dashboard. Defaults to API `:7700` and dashboard `:7701`. |
+| `testpay start --no-dashboard` | API only — useful when you're running `pnpm dev` for the dashboard separately. |
+| `testpay start --config <path>` | Load a specific YAML config (e.g. `deploy/config/testpay.local.yaml`). |
+| `testpay scenario list` | `GET /api/scenarios` — dump the workspace's scenarios as JSON. |
+| `testpay scenario run <id>` | `POST /api/scenarios/{id}/run` — execute a saved scenario and print the result. |
+| `testpay logs` | `GET /api/logs` — recent request logs, JSON. |
+| `testpay logs --follow` / `-f` | Tails new log rows by polling every second. Ctrl-C to stop. |
+
+### Try it out
+
+```bash
+# 1. Start Postgres
+docker compose -f deploy/docker/docker-compose.yml up -d postgres
+
+# 2. Build the dashboard bundle (first time — needed for go:embed)
+cd web && pnpm install && pnpm build && cd ..
+
+# 3. Build the binary
+go build -o bin/testpay ./cmd/testpay
+
+# 4. Start the server in one terminal
+export DATABASE_URL="postgres://testpay:testpay@localhost:5432/testpay?sslmode=disable"
+./bin/testpay start --config deploy/config/testpay.local.yaml
+```
+
+In a second terminal:
+
+```bash
+# List scenarios (empty at first)
+./bin/testpay scenario list
+
+# Send a mock request so there's something to see in logs
+curl -X POST http://localhost:7700/stripe/v1/charges \
+  -H "Content-Type: application/json" \
+  -d '{"amount":5000,"currency":"usd"}'
+
+# Dump recent logs
+./bin/testpay logs
+
+# Tail mode — hit the mock a few more times in another terminal
+./bin/testpay logs --follow
+```
+
+To test `scenario run`, create one first through the dashboard at http://localhost:7701/scenarios, note the ID, then `./bin/testpay scenario run <id>`.
+
+### Limitations
+
+- **Local-only.** The CLI hardcodes `http://localhost:7700` in `cli/scenario.go` and `cli/logs.go`. It does not talk to hosted deployments (Render, etc.). Add a `--base-url` flag + `TESTPAY_API_KEY` env if you need that.
+- **Raw JSON output.** Responses are not formatted; pipe through `jq` for readability.
 
 ---
 
