@@ -46,6 +46,41 @@ TestPay gives you a mock gateway that behaves exactly like Stripe, Razorpay, or 
 
 ---
 
+## Who this is for
+
+- **Payment integration engineers** wiring Stripe / Razorpay / Adyen / any PSP for the first time, or debugging an integration that's misbehaving in prod. Reproduce the specific failure mode, in seconds, instead of rummaging through the gateway's sandbox config.
+- **QA and test automation teams** building regression coverage for checkout flows. Every failure mode becomes a replayable fixture your CI can assert against, so the "this worked yesterday" class of bug stops shipping.
+- **DevEx / platform teams** running internal staging environments where upstream sandbox flakiness (Stripe test mode outages, regional DNS blips, rate limits) breaks builds and burns on-call hours.
+- **Founders and PMs** validating the feasibility of a payments integration before committing engineering weeks. Spin up TestPay, hit it from your prototype, sanity-check edge cases, move on.
+- **Security / compliance reviewers** who want to see how the integration behaves on bank-level declines and CVV mismatches without logging in to production.
+
+---
+
+## How it saves time
+
+| Pain today | With TestPay |
+|---|---|
+| "How do I force a bank timeout to test my retry logic?" — wait for the gateway's sandbox to happen to do it, or open a support ticket | Run `scenario run bank-timeout` — the exact failure fires deterministically, every time |
+| "Our CI depends on Stripe test mode. Build broke because their sandbox is rate-limited." | Local binary. No external dependency, no flaky builds, no shared test credentials. |
+| "We shipped a bug that only triggers on duplicate webhook delivery — can't reproduce locally." | TestPay ships `webhook_duplicate` as a first-class failure mode. One click to replay. |
+| "Bug report mentions 3DS cancel. I've never been able to trigger one in dev." | `redirect_abandoned` scenario. Runs in 50 ms. |
+| "New engineer needs to test the full integration. They don't have test API keys." | One binary. No accounts. Same environment for everyone. |
+| "I need to A/B between two webhook endpoints." | `X-Webhook-URL` header overrides at request time. |
+
+**Concretely**: most teams that adopt this report hours-per-week saved on reproduction + CI flake investigations. The payoff compounds the more gateways you integrate — one tool covers all of them.
+
+---
+
+## Cost efficiency
+
+- **$0 self-hosted.** Single Go binary + Postgres. Drops into the same host as your other services. No per-seat or per-environment licensing.
+- **$0 hosted demo** on Render + Neon free tiers (see [Hosted Deploy](#hosted-deploy-render--neon-free-tier)). Enough for team demos, hackathons, portfolio sites.
+- **Zero external API burn.** Your CI and local dev never hit a real gateway's sandbox, so you don't worry about test-mode rate limits, quota exhaustion, or paid simulation tools like Mountebank / WireMock Cloud.
+- **Replaces two categories of tooling** — payment sandboxes (handled by the PSP but flaky and limited) and generic HTTP mocks (need to hand-roll each response shape). TestPay ships production-accurate gateway response shapes out of the box.
+- **Faster onboarding** — a new engineer is productive in 5 minutes, no test credentials to provision, no MFA on a shared sandbox account.
+
+---
+
 ## Quick Start — Local
 
 **Prerequisites:** Go 1.24+, Node 20+ (for building the dashboard), Postgres 16+ running somewhere
