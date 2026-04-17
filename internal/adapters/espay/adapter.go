@@ -1,5 +1,7 @@
 // Package espay mocks ESPay (Indonesia) payment API.
-// Real-world: RSA-2048 signed payloads. We mock with fake signature fields.
+// Real-world shape: RSA-2048 signed payloads with a uniform
+// error_code / error_message envelope. "0000" is the success code; anything
+// else is an ESPxx-style failure. We mock with a fixed signature placeholder.
 package espay
 
 import (
@@ -10,68 +12,171 @@ import (
 	"github.com/prashantluhar/testpay/internal/engine"
 )
 
+// mockSignature is the fixed placeholder ESPay's mock emits in every signed
+// field. Real ESPay signs with an RSA-2048 private key per merchant. Consumers
+// validating signatures should detect this prefix and skip verification.
+const mockSignature = "mock-rsa-signature"
+
+// successCode / successMsg — ESPay's "zero-is-success" protocol. Callers
+// MUST check error_code == "0000" before trusting the rest of the payload.
+const (
+	successCode = "0000"
+	successMsg  = "Success"
+)
+
 type Adapter struct{}
 
 func New() *Adapter             { return &Adapter{} }
 func (a *Adapter) Name() string { return "espay" }
 
 func (a *Adapter) BuildResponse(result *engine.Result, body []byte) (int, []byte, map[string]string) {
-	h := map[string]string{"Content-Type": "application/json"}
+	headers := map[string]string{"Content-Type": "application/json"}
+	uuid := fmt.Sprintf("rq_%d", time.Now().UnixNano())
+	orderID := fmt.Sprintf("ESP_%d", time.Now().UnixNano())
+	now := time.Now().UTC().Format("20060102150405")
+
 	if result.HTTPStatus >= 400 {
-		b, _ := json.Marshal(map[string]any{
-			"error_code":    "ESP99",
-			"error_message": string(result.Mode),
-			"order_id":      fmt.Sprintf("ESP_%d", time.Now().UnixNano()),
-			"signature":     "mock-rsa-signature",
-		})
-		return result.HTTPStatus, b, h
+		errResp := errorResponse{
+			RqUuid:       uuid,
+			RsDateTime:   now,
+			ErrorCode:    espayErrorCode(result.Mode),
+			ErrorMessage: espayMessage(result.Mode),
+			Signature:    mockSignature,
+			OrderID:      orderID,
+		}
+		out, _ := json.Marshal(errResp)
+		return result.HTTPStatus, out, headers
 	}
-	amt, cur := jsonAmt(body, 5000, "IDR")
-	b, _ := json.Marshal(map[string]any{
-		"error_code":    "0000",
-		"error_message": "Success",
-		"order_id":      fmt.Sprintf("ESP_%d", time.Now().UnixNano()),
-		"payment_code":  fmt.Sprintf("VA_%d", time.Now().UnixNano()),
-		"amount":        amt,
-		"currency":      cur,
-		"signature":     "mock-rsa-signature",
-		"expired_time":  time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339),
-	})
-	return 200, b, h
+
+	amount, currency := extractAmountCurrency(body, 5000, "IDR")
+	resp := inquireResponse{
+		RqUuid:       uuid,
+		RsDateTime:   now,
+		ErrorCode:    successCode,
+		ErrorMessage: successMsg,
+		Signature:    mockSignature,
+		OrderID:      orderID,
+		Amount:       fmt.Sprintf("%d", amount),
+		CCY:          currency,
+		Description:  "Mock ESPay charge",
+		TrxDate:      now,
+		CustomerDetails: customerDetails{
+			FirstName:   "Mock",
+			LastName:    "Customer",
+			PhoneNumber: "081200000000",
+			Email:       "mock@example.com",
+		},
+	}
+	// Pending-like modes degrade to a soft "Processing" code while still
+	// returning a 200 — ESPay does use distinct codes for the async states.
+	if result.IsPending {
+		resp.ErrorCode = "0001"
+		resp.ErrorMessage = "Processing"
+	}
+	out, _ := json.Marshal(resp)
+	return 200, out, headers
 }
 
-func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, amount int64, currency string, req map[string]any) map[string]any {
-	code := "0000"
-	msg := "Success"
+func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, amount int64, currency string, requestBody map[string]any) map[string]any {
+	now := time.Now().UTC().Format("20060102150405")
+	reconcileID := fmt.Sprintf("RCN_%d", time.Now().UnixNano())
+
+	notif := webhookResponse{
+		RqUuid:            fmt.Sprintf("rq_%d", time.Now().UnixNano()),
+		RsDateTime:        now,
+		ErrorCode:         successCode,
+		ErrorMessage:      successMsg,
+		Signature:         mockSignature,
+		OrderID:           chargeID,
+		ReconcileID:       reconcileID,
+		ReconcileDateTime: now,
+	}
 	if result.HTTPStatus >= 400 {
-		code, msg = "ESP99", "Transaction failed"
+		notif.ErrorCode = espayErrorCode(result.Mode)
+		notif.ErrorMessage = espayMessage(result.Mode)
 	}
-	out := map[string]any{
-		"error_code":    code,
-		"error_message": msg,
-		"order_id":      chargeID,
-		"amount":        amount,
-		"currency":      currency,
-		"signature":     "mock-rsa-signature",
-		"timestamp":     time.Now().UTC().Format(time.RFC3339),
-	}
-	if req != nil {
-		out["request_echo"] = req
+
+	// Round-trip through JSON so the caller receives map[string]any — matches
+	// the dispatcher's expectations while keeping the typed DTO at the boundary.
+	raw, _ := json.Marshal(notif)
+	var out map[string]any
+	_ = json.Unmarshal(raw, &out)
+
+	// ESPay webhooks don't carry amount/currency by default (merchants correlate
+	// by order_id) — expose them as top-level fields for downstream convenience.
+	out["amount"] = amount
+	out["currency"] = currency
+
+	if requestBody != nil {
+		out["request_echo"] = requestBody
 	}
 	return out
 }
 
-func jsonAmt(body []byte, defAmt int64, defCur string) (int64, string) {
-	amt, cur := defAmt, defCur
+// espayErrorCode maps the engine's failure-mode taxonomy onto ESPay's error
+// code vocabulary. ESPay uses numeric strings; real production has dozens of
+// codes but the mock sticks to a representative subset.
+func espayErrorCode(mode engine.FailureMode) string {
+	switch mode {
+	case engine.ModeBankDeclineHard, engine.ModeBankDeclineSoft,
+		engine.ModeBankInvalidCVV, engine.ModeBankDoNotHonour:
+		return "ESP02"
+	case engine.ModeBankTimeout, engine.ModeBankServerDown:
+		return "ESP04"
+	case engine.ModePGTimeout, engine.ModePGServerError,
+		engine.ModePGMaintenance:
+		return "ESP99"
+	case engine.ModePGRateLimited:
+		return "ESP05"
+	case engine.ModeNetworkError:
+		return "ESP98"
+	default:
+		return "ESP99"
+	}
+}
+
+// espayMessage is a human-readable counterpart to the error code. Merchants
+// log this; machines should parse error_code.
+func espayMessage(mode engine.FailureMode) string {
+	m := map[engine.FailureMode]string{
+		engine.ModeBankDeclineHard: "Transaction declined",
+		engine.ModeBankDeclineSoft: "Insufficient funds",
+		engine.ModeBankInvalidCVV:  "Invalid CVV",
+		engine.ModeBankDoNotHonour: "Do Not Honour",
+		engine.ModeBankTimeout:     "Bank timeout",
+		engine.ModeBankServerDown:  "Bank unavailable",
+		engine.ModePGTimeout:       "Gateway timeout",
+		engine.ModePGServerError:   "Internal server error",
+		engine.ModePGRateLimited:   "Too many requests",
+		engine.ModePGMaintenance:   "Gateway under maintenance",
+		engine.ModeNetworkError:    "Network error",
+	}
+	if v, ok := m[mode]; ok {
+		return v
+	}
+	return "Transaction failed"
+}
+
+// extractAmountCurrency pulls the customer-supplied amount+currency out of
+// the charge request body. ESPay accepts both numeric and string amounts;
+// we coerce either to int64 minor units and fall back to defaults on any
+// parse failure.
+func extractAmountCurrency(body []byte, defAmount int64, defCurrency string) (int64, string) {
+	amount, currency := defAmount, defCurrency
+	if len(body) == 0 {
+		return amount, currency
+	}
 	var m map[string]any
-	if len(body) == 0 || json.Unmarshal(body, &m) != nil {
-		return amt, cur
+	if err := json.Unmarshal(body, &m); err != nil {
+		return amount, currency
 	}
 	if v, ok := m["amount"].(float64); ok {
-		amt = int64(v)
+		amount = int64(v)
 	}
-	if v, ok := m["currency"].(string); ok && v != "" {
-		cur = v
+	if v, ok := m["ccy"].(string); ok && v != "" {
+		currency = v
+	} else if v, ok := m["currency"].(string); ok && v != "" {
+		currency = v
 	}
-	return amt, cur
+	return amount, currency
 }

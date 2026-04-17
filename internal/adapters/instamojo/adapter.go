@@ -1,4 +1,7 @@
-// Package instamojo mocks Instamojo (IN) payment API.
+// Package instamojo mocks Instamojo's (India) payment-request API.
+// Real-world shape: a `{ success: bool, payment_request: {...} }` envelope on
+// success and `{ success: false, message: "...", errors: {...} }` on
+// validation failures. Amounts are string-encoded throughout.
 package instamojo
 
 import (
@@ -15,52 +18,90 @@ func New() *Adapter             { return &Adapter{} }
 func (a *Adapter) Name() string { return "instamojo" }
 
 func (a *Adapter) BuildResponse(result *engine.Result, body []byte) (int, []byte, map[string]string) {
-	h := map[string]string{"Content-Type": "application/json"}
-	if result.HTTPStatus >= 400 {
-		b, _ := json.Marshal(map[string]any{
-			"success": false,
-			"message": "Payment request creation failed",
-			"errors":  map[string]any{"code": []string{string(result.Mode)}},
-		})
-		return result.HTTPStatus, b, h
-	}
+	headers := map[string]string{"Content-Type": "application/json"}
 	id := fmt.Sprintf("MOJO_%d", time.Now().UnixNano())
-	amt, cur := extractAmount(body)
-	b, _ := json.Marshal(map[string]any{
-		"success": true,
-		"payment_request": map[string]any{
-			"id":         id,
-			"status":     pickStatus(result),
-			"amount":     fmt.Sprintf("%d", amt),
-			"currency":   cur,
-			"longurl":    fmt.Sprintf("https://instamojo.com/@mock/%s", id),
-			"created_at": time.Now().UTC().Format(time.RFC3339),
-			"modified_at": time.Now().UTC().Format(time.RFC3339),
+
+	if result.HTTPStatus >= 400 {
+		errResp := errorResponse{
+			Success: false,
+			Message: instamojoMessage(result.Mode),
+			Errors:  instamojoErrors(result.Mode),
+		}
+		out, _ := json.Marshal(errResp)
+		return result.HTTPStatus, out, headers
+	}
+
+	amount, _ := extractAmountCurrency(body, 5000, "INR")
+	now := time.Now().UTC()
+	resp := initResponse{
+		Success: true,
+		PaymentRequest: paymentRequest{
+			ID:          id,
+			Phone:       "9999999999",
+			Email:       "mock@example.com",
+			BuyerName:   "Mock Buyer",
+			Amount:      fmt.Sprintf("%d", amount),
+			Purpose:     "Mock charge",
+			Status:      instamojoStatus(result),
+			SendSMS:     false,
+			SendEmail:   false,
+			Longurl:     fmt.Sprintf("https://instamojo.com/@mock/%s", id),
+			CreatedAt:   now,
+			ModifiedAt:  now,
+			AllowRepeatedPayments: false,
 		},
-	})
-	return 200, b, h
+	}
+	out, _ := json.Marshal(resp)
+	return 200, out, headers
 }
 
-func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, amount int64, currency string, req map[string]any) map[string]any {
-	out := map[string]any{
-		"payment_id":     chargeID,
-		"status":         pickStatus(result),
-		"amount":         fmt.Sprintf("%d", amount),
-		"currency":       currency,
-		"buyer":          "mock@example.com",
-		"created_at":     time.Now().UTC().Format(time.RFC3339),
-		"payment_request_id": fmt.Sprintf("MOJO_%d", time.Now().UnixNano()),
+func (a *Adapter) BuildWebhookPayload(result *engine.Result, chargeID string, amount int64, currency string, requestBody map[string]any) map[string]any {
+	notif := webhookPayload{
+		PaymentID:        chargeID,
+		PaymentRequestID: fmt.Sprintf("MOJOPR_%d", time.Now().UnixNano()),
+		Status:           instamojoWebhookStatus(result),
+		Amount:           fmt.Sprintf("%d", amount),
+		Currency:         currency,
+		Buyer:            "mock@example.com",
+		BuyerName:        "Mock Buyer",
+		BuyerPhone:       "9999999999",
+		Fees:             "0.00",
+		InstrumentType:   "Card",
+		CreatedAt:        time.Now().UTC(),
 	}
-	if req != nil {
-		if ref, ok := req["purpose"].(string); ok {
-			out["purpose"] = ref
+	if result.HTTPStatus >= 400 {
+		notif.FailureReason = string(result.Mode)
+		notif.FailureMessage = instamojoMessage(result.Mode)
+	}
+
+	raw, _ := json.Marshal(notif)
+	var out map[string]any
+	_ = json.Unmarshal(raw, &out)
+
+	if requestBody != nil {
+		// Echo purpose as a top-level field — it's how Instamojo merchants
+		// commonly correlate webhooks to orders.
+		if p, ok := requestBody["purpose"].(string); ok {
+			out["purpose"] = p
 		}
-		out["request_echo"] = req
+		out["request_echo"] = requestBody
 	}
 	return out
 }
 
-func pickStatus(r *engine.Result) string {
+// instamojoStatus maps engine modes onto the Instamojo init-response status
+// vocabulary. Instamojo uses "Pending" (awaiting payment), "Sent" (link
+// delivered), "Completed" (paid).
+func instamojoStatus(r *engine.Result) string {
+	if r.IsPending {
+		return "Pending"
+	}
+	return "Sent"
+}
+
+// instamojoWebhookStatus maps engine modes onto the webhook-side status set.
+// Instamojo uses "Credit" for a successful capture and "Failed" for a decline.
+func instamojoWebhookStatus(r *engine.Result) string {
 	if r.HTTPStatus >= 400 {
 		return "Failed"
 	}
@@ -70,20 +111,55 @@ func pickStatus(r *engine.Result) string {
 	return "Credit"
 }
 
-func extractAmount(body []byte) (int64, string) {
-	amt, cur := int64(5000), "INR"
-	var m map[string]any
-	if len(body) == 0 || json.Unmarshal(body, &m) != nil {
-		return amt, cur
+func instamojoMessage(mode engine.FailureMode) string {
+	m := map[engine.FailureMode]string{
+		engine.ModeBankDeclineHard: "Payment declined by bank",
+		engine.ModeBankDeclineSoft: "Insufficient funds",
+		engine.ModeBankInvalidCVV:  "Invalid CVV",
+		engine.ModeBankDoNotHonour: "Do not honour",
+		engine.ModeBankTimeout:     "Bank timeout",
+		engine.ModeBankServerDown:  "Bank unavailable",
+		engine.ModePGTimeout:       "Gateway timeout",
+		engine.ModePGServerError:   "Internal server error",
+		engine.ModePGRateLimited:   "Too many requests",
+		engine.ModePGMaintenance:   "Service unavailable",
+		engine.ModeNetworkError:    "Network error",
 	}
+	if v, ok := m[mode]; ok {
+		return v
+	}
+	return "Payment request creation failed"
+}
+
+// instamojoErrors shapes Instamojo's field-level errors map — keyed on the
+// field that failed validation, each value a slice of string messages.
+func instamojoErrors(mode engine.FailureMode) map[string][]string {
+	return map[string][]string{
+		"code": {string(mode)},
+	}
+}
+
+func extractAmountCurrency(body []byte, defAmount int64, defCurrency string) (int64, string) {
+	amount, currency := defAmount, defCurrency
+	if len(body) == 0 {
+		return amount, currency
+	}
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		return amount, currency
+	}
+	// Instamojo accepts numeric or string amounts.
 	switch v := m["amount"].(type) {
 	case float64:
-		amt = int64(v)
+		amount = int64(v)
 	case string:
-		// instamojo sometimes accepts string-encoded amounts
+		var n int64
+		if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n > 0 {
+			amount = n
+		}
 	}
-	if c, ok := m["currency"].(string); ok && c != "" {
-		cur = c
+	if v, ok := m["currency"].(string); ok && v != "" {
+		currency = v
 	}
-	return amt, cur
+	return amount, currency
 }
