@@ -14,7 +14,7 @@ COPY . .
 COPY --from=web /src/web/out ./web/out
 RUN go build -o /out/testpay ./cmd/testpay
 
-FROM alpine:3.19
+FROM alpine:3.23
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /out/testpay .
