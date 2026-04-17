@@ -1,0 +1,24 @@
+name: release-please
+
+# Runs on every push to main. Walks commits since the last tag, decides
+# the next semver bump from conventional-commit prefixes, and opens (or
+# updates) a "chore: release" PR with the changelog + version bumps.
+# Merging that PR creates a v-prefixed tag, which the separate
+# release.yml workflow picks up to build binaries + the Docker image
+# and publish the GitHub Release.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write       # create tags + releases
+  pull-requests: write  # open / update the Release PR
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
