@@ -21,10 +21,15 @@ type MockHandler struct {
 	registry   *adapters.Registry
 	store      store.Store
 	dispatcher *webhook.Dispatcher
+	mode       string
 }
 
 func NewMock(eng *engine.Engine, reg *adapters.Registry, s store.Store, d *webhook.Dispatcher) http.Handler {
-	return &MockHandler{engine: eng, registry: reg, store: s, dispatcher: d}
+	return &MockHandler{engine: eng, registry: reg, store: s, dispatcher: d, mode: "local"}
+}
+
+func NewMockWithMode(eng *engine.Engine, reg *adapters.Registry, s store.Store, d *webhook.Dispatcher, mode string) http.Handler {
+	return &MockHandler{engine: eng, registry: reg, store: s, dispatcher: d, mode: mode}
 }
 
 func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +45,7 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// ── 1. Resolve workspace ────────────────────────────────────────────────
 	// Priority: Authorization: Bearer <api_key> → LocalWorkspaceID fallback.
+	// In hosted mode the fallback is disabled — an invalid or missing key 401s.
 	workspaceID := store.LocalWorkspaceID
 	var workspace *store.Workspace
 	if h.store != nil {
@@ -51,6 +57,11 @@ func (h *MockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if workspace == nil {
+			if h.mode == "hosted" {
+				log.Warn().Str("step", "workspace_resolve").Msg("hosted mode: missing or invalid api_key")
+				http.Error(w, `{"error":"invalid api_key"}`, http.StatusUnauthorized)
+				return
+			}
 			if ws, werr := h.store.GetWorkspaceByID(ctx, workspaceID); werr == nil {
 				workspace = ws
 			}

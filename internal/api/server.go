@@ -37,17 +37,16 @@ func NewServer(cfg *config.Config, s store.Store) *http.Server {
 
 	// Mock gateway endpoints — one /{gateway}/* route per registered adapter.
 	// The handler uses the original URL path to resolve the gateway; don't
-	// strip the prefix. Auth (api_key bearer) only gates mock routes — /api/*
-	// uses session auth and /api/auth/* stays public so signup/login work.
-	mockHandler := handlers.NewMock(eng, reg, s, dispatcher)
-	mockAuth := middleware.Auth(cfg.Server.Mode, cfg.Auth.APIKey)
+	// strip the prefix. The mock handler itself enforces workspace auth via
+	// Bearer api_key in hosted mode, so no extra middleware is needed here.
+	mockHandler := handlers.NewMockWithMode(eng, reg, s, dispatcher, cfg.Server.Mode)
 	for _, g := range reg.KnownGateways() {
 		if g == "agnostic" {
 			continue // agnostic is reached via /v1/*
 		}
-		r.With(mockAuth).Handle("/"+g+"/*", mockHandler)
+		r.Handle("/"+g+"/*", mockHandler)
 	}
-	r.With(mockAuth).Handle("/v1/*", mockHandler)
+	r.Handle("/v1/*", mockHandler)
 
 	// Control API — /api/auth/* stays open; everything else requires a session.
 	r.Route("/api", func(r chi.Router) {
