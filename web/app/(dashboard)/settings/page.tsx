@@ -1,10 +1,12 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  InfoCircledIcon,
+  CheckCircledIcon,
+} from '@radix-ui/react-icons';
+import { Box, Button, Card, Flex, Heading, Text, TextField } from '@radix-ui/themes';
 import { toast } from 'sonner';
 import { useMe, useGateways } from '@/lib/hooks';
 import { ApiKeyReveal } from '@/components/common/api-key-reveal';
@@ -28,7 +30,6 @@ export default function SettingsPage() {
   const [showOverrides, setShowOverrides] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Seed form from persisted workspace webhook_urls.
   useEffect(() => {
     const urls = me?.workspace?.webhook_urls ?? {};
     setDefaultUrl(urls[DEFAULT_KEY] ?? '');
@@ -37,7 +38,6 @@ export default function SettingsPage() {
       if (urls[g]) ov[g] = urls[g];
     }
     setOverrides(ov);
-    // Auto-expand the overrides section if any are non-empty.
     if (Object.keys(ov).length > 0) setShowOverrides(true);
   }, [me?.workspace?.webhook_urls, gateways]);
 
@@ -76,158 +76,165 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <Heading size="6">Settings</Heading>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Workspace</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label>Slug</Label>
-            <code className="block font-mono text-sm bg-muted px-3 py-2 rounded-md mt-1">
-              {workspace.slug}
-            </code>
-          </div>
-          <div>
-            <Label>API key</Label>
-            <div className="mt-1">
-              <ApiKeyReveal value={workspace.api_key} />
+        <Box p="2">
+          <Heading size="3" mb="3">
+            Workspace
+          </Heading>
+          <Flex direction="column" gap="3">
+            <div>
+              <Text as="label" size="2" weight="medium">
+                Slug
+              </Text>
+              <code className="block font-mono text-sm bg-muted px-3 py-2 rounded-md mt-1">
+                {workspace.slug}
+              </code>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Send as <code className="font-mono">Authorization: Bearer …</code> on mock requests
-              to attribute them to this workspace.
-            </p>
-          </div>
-        </CardContent>
+            <div>
+              <Text as="label" size="2" weight="medium">
+                API key
+              </Text>
+              <div className="mt-1">
+                <ApiKeyReveal value={workspace.api_key} />
+              </div>
+              <Text size="1" color="gray" mt="1" as="p">
+                Send as <code className="font-mono">Authorization: Bearer …</code> on mock requests
+                to attribute them to this workspace.
+              </Text>
+            </div>
+          </Flex>
+        </Box>
       </Card>
 
-      {/* Webhook destinations — redesigned */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center justify-between">
-            <span>Webhook destinations</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              {configuredCount === 0
-                ? 'none configured'
-                : `${configuredCount} configured`}
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {/* Default URL — applies to all gateways that don't have an override */}
-          <div>
-            <Label htmlFor="default-webhook" className="flex items-center gap-2">
-              Default URL
-              {defaultUrl && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
-            </Label>
-            <Input
-              id="default-webhook"
-              type="url"
-              placeholder="https://your-app.example.com/webhook"
-              value={defaultUrl}
-              onChange={(e) => setDefaultUrl(e.target.value)}
-              className="font-mono mt-1"
-            />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Used for every gateway unless you set a specific override below. Per-request
-              <code className="font-mono mx-1">X-Webhook-URL</code>header still overrides both.
-            </p>
-          </div>
-
-          {/* Per-gateway overrides — collapsible */}
-          <div className="border-t pt-4">
-            <button
-              type="button"
-              onClick={() => setShowOverrides((v) => !v)}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {showOverrides ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-              Per-gateway overrides
-              <span className="text-xs text-muted-foreground">
-                ({Object.values(overrides).filter((v) => v && v !== defaultUrl).length} set
-                {gateways.length > 0 ? ` of ${gateways.length}` : ''})
-              </span>
-            </button>
-
-            {showOverrides && (
-              <div className="mt-3 space-y-2">
-                {gateways.length === 0 ? (
-                  <div className="text-xs text-muted-foreground flex items-center gap-2">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    Loading gateway list…
-                  </div>
-                ) : (
-                  gateways.map((g) => (
-                    <GatewayOverrideRow
-                      key={g}
-                      gateway={g}
-                      value={overrides[g] ?? ''}
-                      placeholder="Uses default URL"
-                      onChange={(v) =>
-                        setOverrides((prev) => ({ ...prev, [g]: v }))
-                      }
-                    />
-                  ))
+        <Box p="2">
+          <Flex align="center" justify="between" mb="4">
+            <Heading size="3">Webhook destinations</Heading>
+            <Text size="1" color="gray">
+              {configuredCount === 0 ? 'none configured' : `${configuredCount} configured`}
+            </Text>
+          </Flex>
+          <Flex direction="column" gap="5">
+            <div>
+              <Text
+                as="label"
+                size="2"
+                weight="medium"
+                htmlFor="default-webhook"
+                className="flex items-center gap-2"
+              >
+                Default URL
+                {defaultUrl && (
+                  <CheckCircledIcon className="h-3.5 w-3.5 text-emerald-500" />
                 )}
-              </div>
-            )}
-          </div>
+              </Text>
+              <TextField.Root
+                id="default-webhook"
+                type="url"
+                placeholder="https://your-app.example.com/webhook"
+                value={defaultUrl}
+                onChange={(e) => setDefaultUrl(e.target.value)}
+                mt="1"
+                className="font-mono"
+              />
+              <Text size="1" color="gray" mt="1" as="p">
+                Used for every gateway unless you set a specific override below. Per-request
+                <code className="font-mono mx-1">X-Webhook-URL</code>header still overrides both.
+              </Text>
+            </div>
 
-          <div className="flex gap-2 pt-2 border-t">
-            <Button onClick={saveWebhooks} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                const urls = me.workspace.webhook_urls ?? {};
-                setDefaultUrl(urls[DEFAULT_KEY] ?? '');
-                const ov: Record<string, string> = {};
-                for (const g of gateways) if (urls[g]) ov[g] = urls[g];
-                setOverrides(ov);
-              }}
-            >
-              Reset
-            </Button>
-          </div>
-        </CardContent>
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                onClick={() => setShowOverrides((v) => !v)}
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showOverrides ? <ChevronDownIcon /> : <ChevronRightIcon />}
+                Per-gateway overrides
+                <span className="text-xs text-muted-foreground">
+                  ({Object.values(overrides).filter((v) => v && v !== defaultUrl).length} set
+                  {gateways.length > 0 ? ` of ${gateways.length}` : ''})
+                </span>
+              </button>
+
+              {showOverrides && (
+                <div className="mt-3 space-y-2">
+                  {gateways.length === 0 ? (
+                    <div className="text-xs text-muted-foreground flex items-center gap-2">
+                      <InfoCircledIcon className="h-3.5 w-3.5" />
+                      Loading gateway list…
+                    </div>
+                  ) : (
+                    gateways.map((g) => (
+                      <GatewayOverrideRow
+                        key={g}
+                        gateway={g}
+                        value={overrides[g] ?? ''}
+                        placeholder="Uses default URL"
+                        onChange={(v) => setOverrides((prev) => ({ ...prev, [g]: v }))}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <Flex gap="2" pt="2" className="border-t">
+              <Button onClick={saveWebhooks} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
+              <Button
+                variant="soft"
+                color="gray"
+                onClick={() => {
+                  const urls = me.workspace.webhook_urls ?? {};
+                  setDefaultUrl(urls[DEFAULT_KEY] ?? '');
+                  const ov: Record<string, string> = {};
+                  for (const g of gateways) if (urls[g]) ov[g] = urls[g];
+                  setOverrides(ov);
+                }}
+              >
+                Reset
+              </Button>
+            </Flex>
+          </Flex>
+        </Box>
       </Card>
 
       <EndpointsCard gateways={gateways} baseUrl={baseUrl} />
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Appearance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
+        <Box p="2">
+          <Heading size="3" mb="3">
+            Appearance
+          </Heading>
+          <Flex gap="2">
             {(['light', 'dark', 'system'] as const).map((t) => (
               <Button
                 key={t}
-                variant={theme === t ? 'default' : 'outline'}
-                size="sm"
+                variant={theme === t ? 'solid' : 'outline'}
+                size="2"
                 onClick={() => setTheme(t)}
               >
                 {t}
               </Button>
             ))}
-          </div>
-        </CardContent>
+          </Flex>
+        </Box>
       </Card>
 
       {user && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Account</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground">{user.email}</div>
-          </CardContent>
+          <Box p="2">
+            <Heading size="3" mb="2">
+              Account
+            </Heading>
+            <Text size="2" color="gray">
+              {user.email}
+            </Text>
+          </Box>
         </Card>
       )}
     </div>
@@ -241,56 +248,56 @@ function EndpointsCard({ gateways, baseUrl }: { gateways: string[]; baseUrl: str
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center justify-between">
-          <span>Endpoints</span>
-          <span className="text-xs font-normal text-muted-foreground">
+      <Box p="2">
+        <Flex align="center" justify="between" mb="3">
+          <Heading size="3">Endpoints</Heading>
+          <Text size="1" color="gray">
             {gateways.length} gateways
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-xs text-muted-foreground">
-          Point your app at <code className="font-mono">{baseUrl}/{'{gateway}'}</code>. Click a
-          chip below to copy its full URL.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {gateways.map((g) => {
-            const url = g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`;
-            const active = selected === g;
-            return (
-              <button
-                key={g}
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(url);
-                  setSelected(g);
-                  setTimeout(() => setSelected((cur) => (cur === g ? null : cur)), 1500);
-                }}
-                className={`px-3 py-1 rounded-md border text-xs font-mono transition-colors ${
-                  active
-                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-500'
-                    : 'bg-muted hover:bg-accent hover:border-border'
-                }`}
-                title={url}
-              >
-                {active ? 'copied' : g}
-              </button>
-            );
-          })}
-        </div>
-        {selected && (
-          <div className="flex items-center gap-2 pt-2 border-t">
-            <span className="w-20 text-xs uppercase tracking-wider text-muted-foreground">
-              {selected}
-            </span>
-            <code className="flex-1 font-mono text-xs bg-muted px-3 py-2 rounded-md truncate">
-              {selectedUrl}
-            </code>
-            <CopyButton value={selectedUrl} label="" />
+          </Text>
+        </Flex>
+        <Flex direction="column" gap="4">
+          <Text size="1" color="gray" as="p">
+            Point your app at <code className="font-mono">{baseUrl}/{'{gateway}'}</code>. Click a
+            chip below to copy its full URL.
+          </Text>
+          <div className="flex flex-wrap gap-2">
+            {gateways.map((g) => {
+              const url = g === 'agnostic' ? `${baseUrl}/v1` : `${baseUrl}/${g}`;
+              const active = selected === g;
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(url);
+                    setSelected(g);
+                    setTimeout(() => setSelected((cur) => (cur === g ? null : cur)), 1500);
+                  }}
+                  className={`px-3 py-1 rounded-md border text-xs font-mono transition-colors ${
+                    active
+                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-500'
+                      : 'bg-muted hover:bg-accent hover:border-border'
+                  }`}
+                  title={url}
+                >
+                  {active ? 'copied' : g}
+                </button>
+              );
+            })}
           </div>
-        )}
-      </CardContent>
+          {selected && (
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <span className="w-20 text-xs uppercase tracking-wider text-muted-foreground">
+                {selected}
+              </span>
+              <code className="flex-1 font-mono text-xs bg-muted px-3 py-2 rounded-md truncate">
+                {selectedUrl}
+              </code>
+              <CopyButton value={selectedUrl} label="" />
+            </div>
+          )}
+        </Flex>
+      </Box>
     </Card>
   );
 }
@@ -311,7 +318,7 @@ function GatewayOverrideRow({
       <span className="w-24 text-xs uppercase tracking-wider text-muted-foreground shrink-0">
         {gateway}
       </span>
-      <Input
+      <TextField.Root
         type="url"
         value={value}
         placeholder={placeholder}

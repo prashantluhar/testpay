@@ -1,12 +1,5 @@
 'use client';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
+import { Select, TextField } from '@radix-ui/themes';
 
 export interface LogFiltersValue {
   gateway: 'all' | 'stripe' | 'razorpay' | 'agnostic';
@@ -23,37 +16,33 @@ export function LogFilters({
 }) {
   return (
     <div className="flex items-center gap-2 mb-3">
-      <Select
+      <Select.Root
         value={value.gateway}
         onValueChange={(v) => onChange({ ...value, gateway: v as LogFiltersValue['gateway'] })}
       >
-        <SelectTrigger className="w-32">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All gateways</SelectItem>
-          <SelectItem value="stripe">stripe</SelectItem>
-          <SelectItem value="razorpay">razorpay</SelectItem>
-          <SelectItem value="agnostic">agnostic</SelectItem>
-        </SelectContent>
-      </Select>
-      <Select
+        <Select.Trigger className="w-32" />
+        <Select.Content>
+          <Select.Item value="all">All gateways</Select.Item>
+          <Select.Item value="stripe">stripe</Select.Item>
+          <Select.Item value="razorpay">razorpay</Select.Item>
+          <Select.Item value="agnostic">agnostic</Select.Item>
+        </Select.Content>
+      </Select.Root>
+      <Select.Root
         value={value.statusClass}
         onValueChange={(v) =>
           onChange({ ...value, statusClass: v as LogFiltersValue['statusClass'] })
         }
       >
-        <SelectTrigger className="w-32">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All statuses</SelectItem>
-          <SelectItem value="2xx">2xx</SelectItem>
-          <SelectItem value="4xx">4xx</SelectItem>
-          <SelectItem value="5xx">5xx</SelectItem>
-        </SelectContent>
-      </Select>
-      <Input
+        <Select.Trigger className="w-32" />
+        <Select.Content>
+          <Select.Item value="all">All statuses</Select.Item>
+          <Select.Item value="2xx">2xx</Select.Item>
+          <Select.Item value="4xx">4xx</Select.Item>
+          <Select.Item value="5xx">5xx</Select.Item>
+        </Select.Content>
+      </Select.Root>
+      <TextField.Root
         placeholder="Search path…"
         className="w-64"
         value={value.search}

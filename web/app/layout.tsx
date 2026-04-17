@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
+import '@radix-ui/themes/styles.css';
 import './globals.css';
 import { ThemeProvider } from '@/components/common/theme-provider';
+import { ThemeWrapper } from '@/components/common/theme-wrapper';
 import { Toaster } from 'sonner';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
@@ -16,7 +18,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="bg-background text-foreground antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <ThemeWrapper>{children}</ThemeWrapper>
+        </ThemeProvider>
         <Toaster richColors position="top-right" />
       </body>
     </html>

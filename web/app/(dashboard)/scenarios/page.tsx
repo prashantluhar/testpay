@@ -1,17 +1,16 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { Plus, Play, Pencil, Trash2, CheckCircle2, Circle } from 'lucide-react';
-import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  PlusIcon,
+  PlayIcon,
+  Pencil1Icon,
+  TrashIcon,
+  CheckCircledIcon,
+  CircleIcon,
+} from '@radix-ui/react-icons';
+import { toast } from 'sonner';
+import { Button, Flex, Heading, Table, Text } from '@radix-ui/themes';
 import { GatewayBadge } from '@/components/common/gateway-badge';
 import { ConfirmModal } from '@/components/common/confirm-modal';
 import { useScenarios } from '@/lib/hooks';
@@ -41,8 +40,7 @@ export default function ScenariosPage() {
     }
   }
 
-  // Flip is_default on/off. When on, this scenario applies to every mock
-  // request in the workspace until flipped back.
+  // Flip is_default on/off.
   async function toggleDefault(s: Scenario) {
     try {
       await api(`/api/scenarios/${s.id}`, {
@@ -69,91 +67,100 @@ export default function ScenariosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <Flex align="center" justify="between">
         <div>
-          <h1 className="text-2xl font-semibold">Scenarios</h1>
-          <p className="text-sm text-muted-foreground">
+          <Heading size="6">Scenarios</Heading>
+          <Text size="2" color="gray" as="p">
             Named, replayable failure sequences. Click ▶ to activate one for 5 minutes, or toggle
             the ● to pin it as the workspace default.
-          </p>
+          </Text>
         </div>
         <Button asChild>
           <Link href="/scenarios/new">
-            <Plus className="h-4 w-4 mr-2" />
+            <PlusIcon />
             New scenario
           </Link>
         </Button>
-      </div>
+      </Flex>
 
-      {error && <div className="text-destructive text-sm">Failed to load scenarios.</div>}
+      {error && (
+        <Text color="red" size="2">
+          Failed to load scenarios.
+        </Text>
+      )}
 
       <div className="border rounded-md">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Gateway</TableHead>
-              <TableHead>Steps</TableHead>
-              <TableHead className="w-24">Default</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <Table.Root>
+          <Table.Header>
+            <Table.Row>
+              <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Gateway</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Steps</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell className="w-24">Default</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell className="text-right">Actions</Table.ColumnHeaderCell>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
             {data?.map((s) => (
-              <TableRow key={s.id}>
-                <TableCell className="font-medium">{s.name}</TableCell>
-                <TableCell>
+              <Table.Row key={s.id}>
+                <Table.Cell className="font-medium">{s.name}</Table.Cell>
+                <Table.Cell>
                   <GatewayBadge gateway={s.gateway} />
-                </TableCell>
-                <TableCell className="font-mono text-xs">{s.steps?.length ?? 0}</TableCell>
-                <TableCell>
+                </Table.Cell>
+                <Table.Cell className="font-mono text-xs">{s.steps?.length ?? 0}</Table.Cell>
+                <Table.Cell>
                   <Button
-                    size="sm"
+                    size="1"
                     variant="ghost"
+                    color="gray"
                     onClick={() => toggleDefault(s)}
                     title={s.is_default ? 'Clear default' : 'Set as default'}
                   >
                     {s.is_default ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircledIcon className="text-emerald-500" />
                     ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground" />
+                      <CircleIcon className="text-muted-foreground" />
                     )}
                   </Button>
-                </TableCell>
-                <TableCell className="text-right space-x-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => activate(s.id, s.name)}
-                    title="Activate for 5 minutes"
-                  >
-                    <Play className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="ghost" asChild title="Edit">
-                    <Link href={`/scenarios/edit?id=${s.id}`}>
-                      <Pencil className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setDeleteId(s.id)}
-                    title="Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
+                </Table.Cell>
+                <Table.Cell className="text-right">
+                  <Flex gap="1" justify="end">
+                    <Button
+                      size="1"
+                      variant="ghost"
+                      color="gray"
+                      onClick={() => activate(s.id, s.name)}
+                      title="Activate for 5 minutes"
+                    >
+                      <PlayIcon />
+                    </Button>
+                    <Button size="1" variant="ghost" color="gray" asChild title="Edit">
+                      <Link href={`/scenarios/edit?id=${s.id}`}>
+                        <Pencil1Icon />
+                      </Link>
+                    </Button>
+                    <Button
+                      size="1"
+                      variant="ghost"
+                      color="gray"
+                      onClick={() => setDeleteId(s.id)}
+                      title="Delete"
+                    >
+                      <TrashIcon />
+                    </Button>
+                  </Flex>
+                </Table.Cell>
+              </Table.Row>
             ))}
             {data && data.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+              <Table.Row>
+                <Table.Cell colSpan={5} className="text-center text-muted-foreground py-8">
                   No scenarios yet. Create one to get started.
-                </TableCell>
-              </TableRow>
+                </Table.Cell>
+              </Table.Row>
             )}
-          </TableBody>
-        </Table>
+          </Table.Body>
+        </Table.Root>
       </div>
 
       <ConfirmModal

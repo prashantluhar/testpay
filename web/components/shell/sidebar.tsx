@@ -1,15 +1,22 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ListTodo, ScrollText, Settings, Zap, Send } from 'lucide-react';
+import {
+  DashboardIcon,
+  ListBulletIcon,
+  FileTextIcon,
+  GearIcon,
+  LightningBoltIcon,
+  PaperPlaneIcon,
+} from '@radix-ui/react-icons';
 import type { User, Workspace } from '@/lib/types';
 
 const items = [
-  { href: '/', label: 'Overview', icon: LayoutDashboard, hint: 'Live activity + stats' },
-  { href: '/scenarios', label: 'Scenarios', icon: ListTodo, hint: 'Failure-mode sequences' },
-  { href: '/logs', label: 'Logs', icon: ScrollText, hint: 'Every mock request' },
-  { href: '/webhooks', label: 'Webhooks', icon: Send, hint: 'Outbound deliveries' },
-  { href: '/settings', label: 'Settings', icon: Settings, hint: 'Keys, endpoints, theme' },
+  { href: '/', label: 'Overview', icon: DashboardIcon, hint: 'Live activity + stats' },
+  { href: '/scenarios', label: 'Scenarios', icon: ListBulletIcon, hint: 'Failure-mode sequences' },
+  { href: '/logs', label: 'Logs', icon: FileTextIcon, hint: 'Every mock request' },
+  { href: '/webhooks', label: 'Webhooks', icon: PaperPlaneIcon, hint: 'Outbound deliveries' },
+  { href: '/settings', label: 'Settings', icon: GearIcon, hint: 'Keys, endpoints, theme' },
 ];
 
 // User menu lives in the topbar (standard SaaS pattern); sidebar is purely nav.
@@ -19,7 +26,7 @@ export function Sidebar({ workspace }: { user: User; workspace: Workspace }) {
   return (
     <aside className="w-60 shrink-0 border-r flex flex-col bg-card h-screen sticky top-0">
       <div className="p-4 border-b flex items-center gap-2 font-semibold">
-        <Zap className="h-5 w-5 text-emerald-500" />
+        <LightningBoltIcon className="h-5 w-5 text-emerald-500" />
         <span>TestPay</span>
       </div>
       <div className="p-4 text-xs text-muted-foreground border-b">

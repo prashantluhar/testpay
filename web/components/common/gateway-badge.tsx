@@ -1,7 +1,8 @@
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@radix-ui/themes';
+
 export function GatewayBadge({ gateway }: { gateway: string }) {
   return (
-    <Badge variant="outline" className="font-mono text-xs">
+    <Badge variant="outline" color="gray" className="font-mono">
       {gateway}
     </Badge>
   );

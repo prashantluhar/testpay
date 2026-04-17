@@ -1,4 +1,4 @@
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@radix-ui/themes';
 
 export function StatCard({
   label,
@@ -12,10 +12,10 @@ export function StatCard({
   const color = accent === 'good' ? 'text-emerald-500' : accent === 'bad' ? 'text-red-500' : '';
   return (
     <Card>
-      <CardContent className="pt-6">
+      <div className="pt-2">
         <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
         <div className={`text-3xl font-semibold mt-2 ${color}`}>{value}</div>
-      </CardContent>
+      </div>
     </Card>
   );
 }

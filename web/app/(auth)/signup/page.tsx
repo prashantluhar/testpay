@@ -4,10 +4,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Box, Button, Flex, Heading, Text, TextField } from '@radix-ui/themes';
 import { signupSchema, type SignupInput } from '@/lib/schemas';
 import { api, ApiError } from '@/lib/api';
 
@@ -28,44 +25,65 @@ export default function SignupPage() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Create your TestPay account</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" autoComplete="email" {...form.register('email')} />
+    <Box>
+      <Heading size="6" mb="1">
+        Create your TestPay account
+      </Heading>
+      <Text size="2" color="gray" mb="5" as="p">
+        Start mocking payment gateways in under a minute.
+      </Text>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <Flex direction="column" gap="4">
+          <Box>
+            <Text as="label" size="2" weight="medium" htmlFor="email">
+              Email
+            </Text>
+            <TextField.Root
+              id="email"
+              type="email"
+              autoComplete="email"
+              mt="1"
+              {...form.register('email')}
+            />
             {form.formState.errors.email && (
-              <p className="text-xs text-destructive mt-1">{form.formState.errors.email.message}</p>
+              <Text size="1" color="red" mt="1" as="div">
+                {form.formState.errors.email.message}
+              </Text>
             )}
-          </div>
-          <div>
-            <Label htmlFor="password">Password</Label>
-            <Input
+          </Box>
+          <Box>
+            <Text as="label" size="2" weight="medium" htmlFor="password">
+              Password
+            </Text>
+            <TextField.Root
               id="password"
               type="password"
               autoComplete="new-password"
+              mt="1"
               {...form.register('password')}
             />
             {form.formState.errors.password && (
-              <p className="text-xs text-destructive mt-1">
+              <Text size="1" color="red" mt="1" as="div">
                 {form.formState.errors.password.message}
-              </p>
+              </Text>
             )}
-          </div>
-          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+          </Box>
+          <Button
+            type="submit"
+            size="3"
+            disabled={form.formState.isSubmitting}
+            loading={form.formState.isSubmitting}
+          >
             {form.formState.isSubmitting ? 'Creating…' : 'Create account'}
           </Button>
-          <p className="text-xs text-center text-muted-foreground">
+          <Text size="2" color="gray" align="center">
             Already have an account?{' '}
-            <Link href="/login" className="text-foreground underline">
+            <Link href="/login" className="underline text-[var(--accent-11)]">
               Sign in
             </Link>
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+          </Text>
+        </Flex>
+      </form>
+    </Box>
   );
 }

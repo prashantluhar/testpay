@@ -3,18 +3,17 @@ import { useRouter } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  Box,
+  Button,
+  Card,
+  Checkbox,
+  Flex,
+  Heading,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+  Text,
+  TextField,
+} from '@radix-ui/themes';
 import { ScenarioStepEditor, type Step } from './scenario-step-editor';
 import { JsonViewer } from '@/components/common/json-viewer';
 import { CopyButton } from '@/components/common/copy-button';
@@ -73,87 +72,111 @@ export function ScenarioForm({ initial }: { initial?: Scenario }) {
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{isEdit ? 'Edit scenario' : 'New scenario'}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="name">Name</Label>
-            <Input id="name" {...form.register('name')} />
-          </div>
-          <div>
-            <Label htmlFor="desc">Description</Label>
-            <Input id="desc" {...form.register('description')} />
-          </div>
-          <div>
-            <Label>Gateway</Label>
-            <Controller
-              control={form.control}
-              name="gateway"
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="stripe">stripe</SelectItem>
-                    <SelectItem value="razorpay">razorpay</SelectItem>
-                    <SelectItem value="agnostic">agnostic</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
-          <div>
-            <Label>Steps</Label>
-            <Controller
-              control={form.control}
-              name="steps"
-              render={({ field }) => (
-                <ScenarioStepEditor
-                  steps={field.value as Step[]}
-                  onChange={(next) => field.onChange(next)}
+        <Box p="2">
+          <Heading size="4" mb="4">
+            {isEdit ? 'Edit scenario' : 'New scenario'}
+          </Heading>
+          <Flex direction="column" gap="4">
+            <Box>
+              <Text as="label" size="2" weight="medium" htmlFor="name">
+                Name
+              </Text>
+              <TextField.Root id="name" mt="1" {...form.register('name')} />
+            </Box>
+            <Box>
+              <Text as="label" size="2" weight="medium" htmlFor="desc">
+                Description
+              </Text>
+              <TextField.Root id="desc" mt="1" {...form.register('description')} />
+            </Box>
+            <Box>
+              <Text as="label" size="2" weight="medium">
+                Gateway
+              </Text>
+              <Controller
+                control={form.control}
+                name="gateway"
+                render={({ field }) => (
+                  <Select.Root value={field.value} onValueChange={field.onChange}>
+                    <Select.Trigger className="mt-1 w-full" />
+                    <Select.Content>
+                      <Select.Item value="stripe">stripe</Select.Item>
+                      <Select.Item value="razorpay">razorpay</Select.Item>
+                      <Select.Item value="agnostic">agnostic</Select.Item>
+                    </Select.Content>
+                  </Select.Root>
+                )}
+              />
+            </Box>
+            <Box>
+              <Text as="label" size="2" weight="medium">
+                Steps
+              </Text>
+              <Box mt="1">
+                <Controller
+                  control={form.control}
+                  name="steps"
+                  render={({ field }) => (
+                    <ScenarioStepEditor
+                      steps={field.value as Step[]}
+                      onChange={(next) => field.onChange(next)}
+                    />
+                  )}
                 />
-              )}
-            />
-          </div>
-          <div>
-            <Label htmlFor="delay">Webhook delay (ms)</Label>
-            <Input
-              id="delay"
-              type="number"
-              {...form.register('webhook_delay_ms', { valueAsNumber: true })}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Controller
-              control={form.control}
-              name="is_default"
-              render={({ field }) => (
-                <Checkbox checked={field.value} onCheckedChange={field.onChange} id="default" />
-              )}
-            />
-            <Label htmlFor="default">Set as default for this workspace</Label>
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {isEdit ? 'Save changes' : 'Create'}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => router.push('/scenarios')}>
-              Cancel
-            </Button>
-          </div>
-        </CardContent>
+              </Box>
+            </Box>
+            <Box>
+              <Text as="label" size="2" weight="medium" htmlFor="delay">
+                Webhook delay (ms)
+              </Text>
+              <TextField.Root
+                id="delay"
+                type="number"
+                mt="1"
+                {...form.register('webhook_delay_ms', { valueAsNumber: true })}
+              />
+            </Box>
+            <Flex align="center" gap="2">
+              <Controller
+                control={form.control}
+                name="is_default"
+                render={({ field }) => (
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(c) => field.onChange(!!c)}
+                    id="default"
+                  />
+                )}
+              />
+              <Text as="label" size="2" htmlFor="default">
+                Set as default for this workspace
+              </Text>
+            </Flex>
+            <Flex gap="2">
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {isEdit ? 'Save changes' : 'Create'}
+              </Button>
+              <Button
+                type="button"
+                variant="soft"
+                color="gray"
+                onClick={() => router.push('/scenarios')}
+              >
+                Cancel
+              </Button>
+            </Flex>
+          </Flex>
+        </Box>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Preview</CardTitle>
-          <CopyButton value={JSON.stringify(previewJson, null, 2)} />
-        </CardHeader>
-        <CardContent>
+        <Box p="2">
+          <Flex align="center" justify="between" mb="4">
+            <Heading size="4">Preview</Heading>
+            <CopyButton value={JSON.stringify(previewJson, null, 2)} />
+          </Flex>
           <JsonViewer value={previewJson} />
-        </CardContent>
+        </Box>
       </Card>
     </form>
   );

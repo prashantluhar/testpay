@@ -1,7 +1,5 @@
 'use client';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
+import { Button, Dialog, Flex, Tabs, Text } from '@radix-ui/themes';
 import { toast } from 'sonner';
 import { StatusChip } from '@/components/common/status-chip';
 import { GatewayBadge } from '@/components/common/gateway-badge';
@@ -24,49 +22,51 @@ export function LogDetailDrawer({ id, onClose }: { id: string | null; onClose: (
   }
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-[640px] sm:max-w-[640px]">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Content maxWidth="640px">
+        <Dialog.Title>
+          <Flex align="center" gap="2">
             Request detail
             {data?.request && <StatusChip status={data.request.response_status} />}
             {data?.request && <GatewayBadge gateway={data.request.gateway} />}
-          </SheetTitle>
-        </SheetHeader>
+          </Flex>
+        </Dialog.Title>
         {!data ? (
-          <div className="py-6 text-sm text-muted-foreground">Loading…</div>
+          <Text size="2" color="gray" as="p" mt="4">
+            Loading…
+          </Text>
         ) : (
-          <div className="mt-4 space-y-4">
-            <div className="flex gap-2">
-              <Button size="sm" onClick={replay}>
+          <Flex direction="column" gap="4" mt="4">
+            <Flex gap="2">
+              <Button size="2" onClick={replay}>
                 Replay
               </Button>
-            </div>
-            <Tabs defaultValue="request">
-              <TabsList>
-                <TabsTrigger value="request">Request</TabsTrigger>
-                <TabsTrigger value="response">Response</TabsTrigger>
-                <TabsTrigger value="webhook">Webhook</TabsTrigger>
-              </TabsList>
-              <TabsContent value="request" className="space-y-2">
+            </Flex>
+            <Tabs.Root defaultValue="request">
+              <Tabs.List>
+                <Tabs.Trigger value="request">Request</Tabs.Trigger>
+                <Tabs.Trigger value="response">Response</Tabs.Trigger>
+                <Tabs.Trigger value="webhook">Webhook</Tabs.Trigger>
+              </Tabs.List>
+              <Tabs.Content value="request" className="space-y-2 pt-3">
                 <div className="text-xs text-muted-foreground">Headers</div>
                 <JsonViewer value={data.request.request_headers} />
                 <div className="text-xs text-muted-foreground mt-2">Body</div>
                 <JsonViewer value={data.request.request_body} />
-              </TabsContent>
-              <TabsContent value="response" className="space-y-2">
+              </Tabs.Content>
+              <Tabs.Content value="response" className="space-y-2 pt-3">
                 <div className="text-xs text-muted-foreground">Headers</div>
                 <JsonViewer value={data.request.response_headers} />
                 <div className="text-xs text-muted-foreground mt-2">Body</div>
                 <JsonViewer value={data.request.response_body} />
-              </TabsContent>
-              <TabsContent value="webhook">
+              </Tabs.Content>
+              <Tabs.Content value="webhook" className="pt-3">
                 <JsonViewer value={data.webhook ?? { note: 'no webhook for this request' }} />
-              </TabsContent>
-            </Tabs>
-          </div>
+              </Tabs.Content>
+            </Tabs.Root>
+          </Flex>
         )}
-      </SheetContent>
-    </Sheet>
+      </Dialog.Content>
+    </Dialog.Root>
   );
 }

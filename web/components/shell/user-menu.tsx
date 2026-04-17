@@ -1,15 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown } from 'lucide-react';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  ExitIcon,
+  GearIcon,
+  PersonIcon,
+  ChevronDownIcon,
+} from '@radix-ui/react-icons';
+import { DropdownMenu } from '@radix-ui/themes';
 import { api } from '@/lib/api';
 import type { User } from '@/lib/types';
 
@@ -34,8 +32,8 @@ export function UserMenu({ user }: { user: User }) {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
         <button
           type="button"
           className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent/50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -44,30 +42,32 @@ export function UserMenu({ user }: { user: User }) {
             {initials(user.email)}
           </span>
           <span className="text-sm max-w-[160px] truncate hidden md:inline">{user.email}</span>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronDownIcon className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="flex items-center gap-2">
-          <UserIcon className="h-4 w-4 text-muted-foreground" />
-          <div className="flex flex-col min-w-0">
-            <span className="text-xs text-muted-foreground">Signed in as</span>
-            <span className="text-sm truncate">{user.email}</span>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content align="end" className="w-56">
+        <DropdownMenu.Label>
+          <div className="flex items-center gap-2">
+            <PersonIcon className="h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs text-muted-foreground">Signed in as</span>
+              <span className="text-sm truncate">{user.email}</span>
+            </div>
           </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/settings" className="cursor-pointer">
-            <SettingsIcon className="h-4 w-4 mr-2" />
+        </DropdownMenu.Label>
+        <DropdownMenu.Separator />
+        <DropdownMenu.Item asChild>
+          <Link href="/settings" className="cursor-pointer flex items-center">
+            <GearIcon className="h-4 w-4 mr-2" />
             Settings
           </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={signOut} className="cursor-pointer text-red-500 focus:text-red-500">
-          <LogOut className="h-4 w-4 mr-2" />
+        </DropdownMenu.Item>
+        <DropdownMenu.Separator />
+        <DropdownMenu.Item color="red" onSelect={signOut} className="cursor-pointer">
+          <ExitIcon className="h-4 w-4 mr-2" />
           Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
   );
 }

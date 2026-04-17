@@ -1,12 +1,5 @@
 'use client';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Button, Dialog, Flex, Text } from '@radix-ui/themes';
 
 export function ConfirmModal({
   open,
@@ -26,21 +19,23 @@ export function ConfirmModal({
   destructive?: boolean;
 }) {
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
+    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Content maxWidth="440px">
+        <Dialog.Title>{title}</Dialog.Title>
+        {description && (
+          <Dialog.Description size="2" color="gray">
+            {description}
+          </Dialog.Description>
+        )}
+        <Flex gap="2" justify="end" mt="4">
+          <Button variant="soft" color="gray" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant={destructive ? 'destructive' : 'default'} onClick={onConfirm}>
+          <Button color={destructive ? 'red' : undefined} onClick={onConfirm}>
             {confirmLabel}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
   );
 }

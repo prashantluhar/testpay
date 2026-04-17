@@ -1,14 +1,6 @@
 'use client';
 import { FAILURE_MODES, type FailureMode } from '@/lib/failure-modes';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select } from '@radix-ui/themes';
 
 export function OutcomePicker({
   value,
@@ -26,22 +18,20 @@ export function OutcomePicker({
   );
 
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as FailureMode)}>
-      <SelectTrigger className="font-mono text-xs">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
+    <Select.Root value={value} onValueChange={(v) => onChange(v as FailureMode)}>
+      <Select.Trigger className="font-mono text-xs" />
+      <Select.Content>
         {Object.entries(groups).map(([group, items]) => (
-          <SelectGroup key={group}>
-            <SelectLabel>{group}</SelectLabel>
+          <Select.Group key={group}>
+            <Select.Label>{group}</Select.Label>
             {items.map((m) => (
-              <SelectItem key={m.value} value={m.value} className="font-mono text-xs">
+              <Select.Item key={m.value} value={m.value} className="font-mono text-xs">
                 {m.value}
-              </SelectItem>
+              </Select.Item>
             ))}
-          </SelectGroup>
+          </Select.Group>
         ))}
-      </SelectContent>
-    </Select>
+      </Select.Content>
+    </Select.Root>
   );
 }

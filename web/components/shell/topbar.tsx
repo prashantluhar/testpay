@@ -1,6 +1,6 @@
 'use client';
 import { usePathname } from 'next/navigation';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@radix-ui/themes';
 import { CopyButton } from '@/components/common/copy-button';
 import { MODE } from '@/lib/types';
 import { UserMenu } from './user-menu';
@@ -17,7 +17,7 @@ export function Topbar({ user }: { user: User }) {
     <header className="sticky top-0 z-30 h-14 border-b px-6 flex items-center justify-between bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
       <div className="text-sm text-muted-foreground capitalize truncate">{crumb}</div>
       <div className="flex items-center gap-3">
-        <Badge variant="outline" className="font-mono text-xs">
+        <Badge variant="outline" color="gray" className="font-mono">
           {MODE}
         </Badge>
         <span className="font-mono text-xs text-muted-foreground hidden lg:inline">{baseUrl}</span>
