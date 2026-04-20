@@ -1,4 +1,4 @@
-FROM node:20-alpine AS web
+FROM node:25-alpine AS web
 WORKDIR /src/web
 RUN corepack enable
 COPY web/package.json web/pnpm-lock.yaml ./
